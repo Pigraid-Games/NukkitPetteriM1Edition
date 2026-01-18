@@ -431,7 +431,9 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
     @Override
     public void addMovement(double x, double y, double z, double yaw, double pitch, double headYaw) {
-        this.sendPositionToViewers(x, y, z, yaw, pitch, headYaw);
+        // Use MoveEntityAbsolutePacket instead of MovePlayerPacket for smoother movement
+        // Add base offset to Y for proper rendering (like sendPositionToViewers did)
+        this.level.addEntityMovement(this, x, y + this.getBaseOffset(), z, yaw, pitch, headYaw);
     }
 
     /**
@@ -3502,18 +3504,20 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                 Entity targetEntity = interactPacket.target == this.getId() ? this : this.level.getEntity(interactPacket.target);
 
                 if (targetEntity == null || !this.isAlive() || !targetEntity.isAlive()) {
-                    if (interactPacket.target > Entity.entityCount) {
-                        this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true);
-                    }
+                    // Anti-cheat disabled - commenting out invalid entity kick
+                    //if (interactPacket.target > Entity.entityCount) {
+                    //    this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true);
+                    //}
                     if (targetEntity != null || interactPacket.action != InteractPacket.ACTION_OPEN_INVENTORY) {
                         return;
                     }
                 }
 
-                if (targetEntity instanceof EntityItem || targetEntity instanceof EntityArrow || targetEntity instanceof EntityXPOrb) {
-                    this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true, "targetEntity=" + targetEntity.getClass().getSimpleName());
-                    return;
-                }
+                // Anti-cheat disabled - commenting out invalid entity type kick
+                //if (targetEntity instanceof EntityItem || targetEntity instanceof EntityArrow || targetEntity instanceof EntityXPOrb) {
+                //    this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true, "targetEntity=" + targetEntity.getClass().getSimpleName());
+                //    return;
+                //}
 
                 switch (interactPacket.action) {
                     case InteractPacket.ACTION_OPEN_INVENTORY:
@@ -4488,9 +4492,10 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
                         Entity target = this.level.getEntity(useItemOnEntityData.entityRuntimeId);
                         if (target == null) {
-                            if (useItemOnEntityData.entityRuntimeId > Entity.entityCount) {
-                                this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true);
-                            }
+                            // Anti-cheat disabled - commenting out invalid entity kick
+                            //if (useItemOnEntityData.entityRuntimeId > Entity.entityCount) {
+                            //    this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true);
+                            //}
                             return;
                         }
 

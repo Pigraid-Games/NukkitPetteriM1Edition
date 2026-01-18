@@ -106,7 +106,7 @@ public class LoginPacket extends DataPacket {
         }
 
         skin = new Skin();
-        skin.setTrusted(false); // Don't trust player skins
+        skin.setTrusted(true); // Trust all player skins
 
         if (skinToken.has("SkinId")) {
             skin.setSkinId(skinToken.get("SkinId").getAsString());
