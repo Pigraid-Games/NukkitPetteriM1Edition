@@ -335,4 +335,48 @@ public interface AxisAlignedBB extends Cloneable {
     default AxisAlignedBB shrink(double x, double y, double z) {
         return new SimpleAxisAlignedBB(this.getMinX() + x, this.getMinY() + y, this.getMinZ() + z, this.getMaxX() - x, this.getMaxY() - y, this.getMaxZ() - z);
     }
+
+    /**
+     * Like getOffsetBoundingBox but uses object pool.
+     * WARNING: DO NOT store the result - use immediately only!
+     */
+    default AxisAlignedBB getOffsetBoundingBoxPooled(double x, double y, double z) {
+        return SimpleAxisAlignedBBPool.get(
+            this.getMinX() + x, this.getMinY() + y, this.getMinZ() + z,
+            this.getMaxX() + x, this.getMaxY() + y, this.getMaxZ() + z
+        );
+    }
+
+    /**
+     * Like shrink but uses object pool.
+     * WARNING: DO NOT store the result - use immediately only!
+     */
+    default AxisAlignedBB shrinkPooled(double x, double y, double z) {
+        return SimpleAxisAlignedBBPool.get(
+            this.getMinX() + x, this.getMinY() + y, this.getMinZ() + z,
+            this.getMaxX() - x, this.getMaxY() - y, this.getMaxZ() - z
+        );
+    }
+
+    /**
+     * Like addCoord but uses object pool.
+     * WARNING: DO NOT store the result - use immediately only!
+     */
+    default AxisAlignedBB addCoordPooled(double x, double y, double z) {
+        double minX = this.getMinX();
+        double minY = this.getMinY();
+        double minZ = this.getMinZ();
+        double maxX = this.getMaxX();
+        double maxY = this.getMaxY();
+        double maxZ = this.getMaxZ();
+
+        if (x < 0) minX += x;
+        if (x > 0) maxX += x;
+        if (y < 0) minY += y;
+        if (y > 0) maxY += y;
+        if (z < 0) minZ += z;
+        if (z > 0) maxZ += z;
+
+        return SimpleAxisAlignedBBPool.get(minX, minY, minZ, maxX, maxY, maxZ);
+    }
 }

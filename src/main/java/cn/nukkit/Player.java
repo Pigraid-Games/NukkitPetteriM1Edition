@@ -297,6 +297,10 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
     public Block breakingBlock; // Block player is breaking currently
     private BlockFace breakingBlockFace; // Block face player is breaking currently
     public long firstBlockBreak; // A slightly shorter break time for first block
+
+    // Attack cooldown tracking to prevent double-hit exploit
+    private long lastAttackTime = 0;
+    private static final long ATTACK_COOLDOWN_MS = 500; // 10 ticks at 20 TPS
     private double lastBreakTime; // Store last block break time to determine if firstBlockBreak is valid
     private PlayerBlockActionData lastBlockAction;
     public EntityFishingHook fishing;
@@ -1475,6 +1479,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
         this.noDamageTicks = 60;
         this.setAirTicks(400);
+        this.lastAttackTime = 0; // Reset attack cooldown on first spawn
 
         if (this.hasPermission(Server.BROADCAST_CHANNEL_USERS)) {
             this.server.getPluginManager().subscribeToPermission(Server.BROADCAST_CHANNEL_USERS, this);
@@ -4499,11 +4504,17 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                             return;
                         }
 
-                        if (inventory.getHeldItemIndex() != useItemOnEntityData.hotbarSlot) {
-                            inventory.equipItem(useItemOnEntityData.hotbarSlot);
-                        }
-
+                        // Use server-tracked held item, do not trust client hotbarSlot
                         item = this.inventory.getItemInHand();
+
+                        // Log mismatch for potential anti-cheat detection
+                        if (inventory.getHeldItemIndex() != useItemOnEntityData.hotbarSlot) {
+                            if (server.suomiCraftPEMode()) { // Only log in anti-cheat mode
+                                getServer().getLogger().debug("Player " + getName() +
+                                    " attack packet hotbarSlot mismatch: client=" +
+                                    useItemOnEntityData.hotbarSlot + " server=" + inventory.getHeldItemIndex());
+                            }
+                        }
 
                         /*if (!useItemOnEntityData.itemInHand.equals(item)) {
                             this.needSendHeldItem = true;
@@ -4586,6 +4597,13 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                     this.setSprinting(false);
                                 }
 
+                                // Attack cooldown check - prevent double-hit exploit
+                                long currentTime = System.currentTimeMillis();
+                                if (currentTime - this.lastAttackTime < ATTACK_COOLDOWN_MS) {
+                                    // Attack too soon - block it
+                                    return;
+                                }
+
                                 // Anti kill aura
                                 if (this.attacksPerTick > 10 && server.suomiCraftPEMode()) {
                                     return;
@@ -4624,6 +4642,9 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                     }
                                     return;
                                 }
+
+                                // Update attack timestamp after successful attack
+                                this.lastAttackTime = currentTime;
 
                                 for (Enchantment enchantment : item.getEnchantments()) {
                                     enchantment.doPostAttack(this, target);
@@ -5089,7 +5110,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         double maxOffset = (Math.abs(this.x) >= 1048576 || Math.abs(this.z) >= 1048576) ? 0.1 : 0.05;
 
         // Replacement for this.fastMove(dx, dy, dz) start
-        if (this.isSpectator() || !this.level.hasCollision(this, this.boundingBox.getOffsetBoundingBox(dx, dy, dz).shrink(maxOffset, this.getStepHeight(), maxOffset), false)) {
+        if (this.isSpectator() || !this.level.hasCollision(this, this.boundingBox.getOffsetBoundingBoxPooled(dx, dy, dz).shrinkPooled(maxOffset, this.getStepHeight(), maxOffset), false)) {
             this.x = newPos.x;
             this.y = newPos.y;
             this.z = newPos.z;
@@ -5100,7 +5121,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         this.checkChunks();
 
         if (!this.isSpectator() && (!this.onGround || dy != 0)) {
-            AxisAlignedBB bb = this.boundingBox.clone();
+            AxisAlignedBB bb = cn.nukkit.math.SimpleAxisAlignedBBPool.copyOf(this.boundingBox);
             bb.setMinY(bb.getMinY() - 0.75);
 
             // Hack: fix fall damage from walls while falling
@@ -6988,6 +7009,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         this.deadTicks = 0;
         this.noDamageTicks = 60;
         this.timeSinceRest = 0;
+        this.lastAttackTime = 0; // Reset attack cooldown on respawn
 
         this.removeAllEffects(EntityPotionEffectEvent.Cause.DEATH);
         this.setHealth(this.getMaxHealth());
