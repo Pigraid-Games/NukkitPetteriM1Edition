@@ -642,11 +642,18 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
     }
 
     public void addParticleEffect(Vector3f pos, String identifier, long uniqueEntityId, int dimensionId, Player... players) {
+        this.addParticleEffect(pos, identifier, uniqueEntityId, dimensionId, null, players);
+    }
+
+    public void addParticleEffect(Vector3f pos, String identifier, long uniqueEntityId, int dimensionId, String molangVariablesJson, Player... players) {
         SpawnParticleEffectPacket pk = new SpawnParticleEffectPacket();
         pk.identifier = identifier;
         pk.uniqueEntityId = uniqueEntityId;
         pk.dimensionId = dimensionId;
         pk.position = pos;
+        if (molangVariablesJson != null) {
+            pk.molangVariablesJson = java.util.Optional.of(molangVariablesJson);
+        }
 
         if (players == null || players.length == 0) {
             addChunkPacket(pos.getFloorX() >> 4, pos.getFloorZ() >> 4, pk);

@@ -1,15 +1,23 @@
 package cn.nukkit.entity.projectile;
 
+import cn.nukkit.Player;
+import cn.nukkit.Server;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.data.NBTEntityData;
+import cn.nukkit.entity.item.EntityFirework;
 import cn.nukkit.event.entity.EntityDamageEvent;
 import cn.nukkit.event.entity.EntityDamageEvent.DamageCause;
 import cn.nukkit.event.entity.EntityExplosionPrimeEvent;
 import cn.nukkit.item.Item;
 import cn.nukkit.level.Explosion;
+import cn.nukkit.level.MovingObjectPosition;
 import cn.nukkit.level.format.FullChunk;
+import cn.nukkit.math.AxisAlignedBB;
+import cn.nukkit.math.Vector3;
 import cn.nukkit.nbt.NBTIO;
 import cn.nukkit.nbt.tag.CompoundTag;
+import cn.nukkit.nbt.tag.DoubleTag;
+import cn.nukkit.nbt.tag.FloatTag;
 import cn.nukkit.nbt.tag.ListTag;
 import cn.nukkit.nbt.tag.Tag;
 import cn.nukkit.network.protocol.EntityEventPacket;
@@ -40,6 +48,111 @@ public class EntityCrossbowFirework extends EntityProjectile {
                 source.getCause() == DamageCause.ENTITY_EXPLOSION ||
                 source.getCause() == DamageCause.BLOCK_EXPLOSION)
                 && super.attack(source);
+    }
+
+    @Override
+    protected double getBaseDamage() {
+        if (this.firework == null) return 0;
+        Tag nbt = this.firework.getNamedTag();
+        if (nbt == null) return 0;
+        nbt = ((CompoundTag) nbt).get("Fireworks");
+        if (!(nbt instanceof CompoundTag)) return 0;
+        nbt = ((CompoundTag) nbt).get("Explosions");
+        if (!(nbt instanceof ListTag)) return 0;
+        int starCount = ((ListTag<?>) nbt).size();
+        if (starCount == 0) return 0;
+        // Vanilla: base 5-6 for first star, +1-2 per additional star
+        ThreadLocalRandom rand = ThreadLocalRandom.current();
+        return 5 + rand.nextInt(2) + (starCount - 1) * (1 + rand.nextInt(2));
+    }
+
+    @Override
+    public void onCollideWithEntity(Entity entity) {
+        // Spawn a temporary EntityFirework at the hit entity's position for the explosion visual
+        if (this.firework != null) {
+            CompoundTag fwNbt = new CompoundTag()
+                    .putList(new ListTag<DoubleTag>("Pos")
+                            .add(new DoubleTag("", entity.x))
+                            .add(new DoubleTag("", entity.y + entity.getHeight() / 2))
+                            .add(new DoubleTag("", entity.z)))
+                    .putList(new ListTag<DoubleTag>("Motion")
+                            .add(new DoubleTag("", 0))
+                            .add(new DoubleTag("", 0))
+                            .add(new DoubleTag("", 0)))
+                    .putList(new ListTag<FloatTag>("Rotation")
+                            .add(new FloatTag("", 0))
+                            .add(new FloatTag("", 0)))
+                    .putCompound("FireworkItem", NBTIO.putItemHelper(this.firework));
+            EntityFirework visualFirework = new EntityFirework(entity.chunk, fwNbt);
+            visualFirework.spawnToAll();
+
+            // Immediately trigger explosion on the visual firework
+            EntityEventPacket pk = new EntityEventPacket();
+            pk.event = EntityEventPacket.FIREWORK_EXPLOSION;
+            pk.eid = visualFirework.getId();
+            Server.broadcastPacket(visualFirework.getViewers().values(), pk);
+
+            level.addLevelSoundEvent(entity, LevelSoundEventPacket.SOUND_LARGE_BLAST, -1, NETWORK_ID);
+
+            // AoE explosion damage centered on the hit entity
+            Tag nbt = this.firework.getNamedTag();
+            if (nbt != null) {
+                nbt = ((CompoundTag) nbt).get("Fireworks");
+                if (nbt instanceof CompoundTag) {
+                    nbt = ((CompoundTag) nbt).get("Explosions");
+                    if (nbt instanceof ListTag && ((ListTag<?>) nbt).size() != 0) {
+                        EntityExplosionPrimeEvent explosionEv = new EntityExplosionPrimeEvent(this, 2.5);
+                        explosionEv.setBlockBreaking(false);
+                        server.getPluginManager().callEvent(explosionEv);
+                        if (!explosionEv.isCancelled()) {
+                            Explosion explosion = new Explosion(entity, explosionEv.getForce(), this);
+                            explosion.explodeEntity();
+                        }
+                    }
+                }
+            }
+
+            visualFirework.kill();
+        }
+
+        // Apply direct hit damage
+        float damage = this.getResultDamage();
+        EntityDamageEvent ev;
+        if (this.shootingEntity == null) {
+            ev = new EntityDamageEvent(this, DamageCause.PROJECTILE, damage);
+        } else {
+            ev = new cn.nukkit.event.entity.EntityDamageByChildEntityEvent(this.shootingEntity, this, entity, DamageCause.PROJECTILE, damage, this.knockBack);
+        }
+        entity.attack(ev);
+
+        this.close();
+    }
+
+    private void triggerExplosion() {
+        EntityEventPacket pk = new EntityEventPacket();
+        pk.event = EntityEventPacket.FIREWORK_EXPLOSION;
+        pk.eid = this.getId();
+        this.level.addChunkPacket(this.getChunkX(), this.getChunkZ(), pk);
+        level.addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_LARGE_BLAST, -1, NETWORK_ID);
+
+        if (this.firework != null) {
+            Tag nbt = this.firework.getNamedTag();
+            if (nbt != null) {
+                nbt = ((CompoundTag) nbt).get("Fireworks");
+                if (nbt instanceof CompoundTag) {
+                    nbt = ((CompoundTag) nbt).get("Explosions");
+                    if (nbt instanceof ListTag && ((ListTag<?>) nbt).size() != 0) {
+                        EntityExplosionPrimeEvent ev = new EntityExplosionPrimeEvent(this, 2.5);
+                        ev.setBlockBreaking(false);
+                        server.getPluginManager().callEvent(ev);
+                        if (!ev.isCancelled()) {
+                            Explosion explosion = new Explosion(this, ev.getForce(), this);
+                            explosion.explodeEntity();
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @Override
@@ -100,6 +213,31 @@ public class EntityCrossbowFirework extends EntityProjectile {
 
             this.move(this.motionX, this.motionY, this.motionZ);
 
+            // Check for entity collision
+            if (!this.closed) {
+                Vector3 moveVector = new Vector3(this.x + this.motionX, this.y + this.motionY, this.z + this.motionZ);
+                Entity[] list = this.getLevel().getCollidingEntities(this.boundingBox.addCoord(this.motionX, this.motionY, this.motionZ).expand(1, 1, 1), this);
+                double nearDistance = Integer.MAX_VALUE;
+                Entity nearEntity = null;
+                for (Entity entity : list) {
+                    if ((entity == this.shootingEntity && this.age < 5) || (entity instanceof Player && ((Player) entity).getGamemode() == Player.SPECTATOR)) {
+                        continue;
+                    }
+                    AxisAlignedBB bb = entity.boundingBox.grow(0.3, 0.3, 0.3);
+                    MovingObjectPosition ob = bb.calculateIntercept(this, moveVector);
+                    if (ob == null) continue;
+                    double distance = this.distanceSquared(ob.hitVector);
+                    if (distance < nearDistance) {
+                        nearDistance = distance;
+                        nearEntity = entity;
+                    }
+                }
+                if (nearEntity != null) {
+                    onCollideWithEntity(nearEntity);
+                    return true;
+                }
+            }
+
             this.updateMovement();
 
             if (this.age == 0) {
@@ -107,35 +245,8 @@ public class EntityCrossbowFirework extends EntityProjectile {
             }
 
             if (this.age >= this.lifetime) {
-                EntityEventPacket pk = new EntityEventPacket();
-                pk.event = EntityEventPacket.FIREWORK_EXPLOSION;
-                pk.eid = this.getId();
-
-                this.level.addChunkPacket(this.getChunkX(), this.getChunkZ(), pk);
-
-                level.addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_LARGE_BLAST, -1, NETWORK_ID);
-
-                Tag nbt = firework.getNamedTag();
-                if (nbt != null) {
-                    nbt = ((CompoundTag) nbt).get("Fireworks");
-                    if (nbt instanceof CompoundTag) {
-                        nbt = ((CompoundTag) nbt).get("Explosions");
-                        if (nbt instanceof ListTag) {
-                            if (((ListTag) nbt).size() != 0) {
-                                EntityExplosionPrimeEvent ev = new EntityExplosionPrimeEvent(this, 2.5);
-                                ev.setBlockBreaking(false);
-                                server.getPluginManager().callEvent(ev);
-                                if (!ev.isCancelled()) {
-                                    Explosion explosion = new Explosion(this, ev.getForce(), this);
-                                    explosion.explodeEntity();
-                                }
-                            }
-                        }
-                    }
-                }
-
+                triggerExplosion();
                 this.kill(); // Using close() here would remove the firework before the explosion is displayed
-
                 hasUpdate = true;
             }
         }

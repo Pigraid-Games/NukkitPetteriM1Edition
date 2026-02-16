@@ -4,6 +4,7 @@ import cn.nukkit.Player;
 import cn.nukkit.Server;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.event.entity.EntityCombustByEntityEvent;
+import cn.nukkit.item.Item;
 
 /**
  * @author MagicDroidX
@@ -13,6 +14,11 @@ public class EnchantmentFireAspect extends Enchantment {
 
     protected EnchantmentFireAspect() {
         super(ID_FIRE_ASPECT, "fire", Rarity.RARE, EnchantmentType.SWORD);
+    }
+
+    @Override
+    public boolean canEnchant(Item item) {
+        return item.isMace() || super.canEnchant(item);
     }
 
     @Override

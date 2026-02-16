@@ -2693,6 +2693,7 @@ public class Server {
         Entity.registerEntity("LlamaSpit", EntityLlamaSpit.class);
         Entity.registerEntity("EvocationFangs", EntityEvocationFangs.class);
         Entity.registerEntity("EnderCharge", EntityEnderCharge.class);
+        Entity.registerEntity("WindCharge", EntityWindCharge.class);
         Entity.registerEntity("FishingHook", EntityFishingHook.class);
         Entity.registerEntity("EnderEye", EntityEnderEye.class);
         Entity.registerEntity("AreaEffectCloud", EntityAreaEffectCloud.class);
@@ -3364,6 +3365,8 @@ public class Server {
      * @param notifyNoUpdate whether the already on the latest version message should be shown
      */
     public void updateNotification(CommandSender sender, boolean notifyNoUpdate) {
+        // Update notifications disabled for custom fork
+        if (true) return;
         CompletableFuture.runAsync(() -> {
             try {
                 if (!Nukkit.getBranch().equals(Nukkit.MAIN_BRANCH)) {

@@ -80,6 +80,7 @@ public class ItemCrossbow extends ItemBow {
                         .add(new FloatTag("", (player.yaw > 180 ? 360 : 0) - (float) player.yaw))
                         .add(new FloatTag("", (float) -player.pitch)));
         EntityProjectile arrow;
+        Enchantment piercingEnchant = this.getEnchantment(Enchantment.ID_CROSSBOW_PIERCING);
         boolean isFirework = "minecraft:firework_rocket".equals(chargedItem.getString("Name"));
         if (isFirework) {
             arrow = new EntityCrossbowFirework(player.chunk, nbt, player);
@@ -89,12 +90,12 @@ public class ItemCrossbow extends ItemBow {
             }
             ((EntityCrossbowFirework) arrow).setFirework(firework);
         } else {
-            arrow = (EntityArrow) Entity.createEntity(EntityArrow.NETWORK_ID, player.chunk, nbt, player, false, true);
+            arrow = (EntityArrow) Entity.createEntity(EntityArrow.NETWORK_ID, player.chunk, nbt, player, true, true);
             if (arrowData > 0) {
                 ((EntityArrow) arrow).setData(arrowData);
             }
-            if (this.hasEnchantment(Enchantment.ID_CROSSBOW_PIERCING)) {
-                arrow.piercing = 1;
+            if (piercingEnchant != null) {
+                arrow.piercing = piercingEnchant.getLevel();
             }
         }
         EntityShootBowEvent entityShootBowEvent = new EntityShootBowEvent(player, this, arrow, isFirework ? 1 : 3.5);
@@ -114,52 +115,60 @@ public class ItemCrossbow extends ItemBow {
                 } else {
                     proj.spawnToAll();
                     if (!isFirework && this.hasEnchantment(Enchantment.ID_CROSSBOW_MULTISHOT)) {
-                        CompoundTag nbt1 = new CompoundTag()
-                                .putList(new ListTag<DoubleTag>("Pos")
-                                        .add(new DoubleTag("", player.x))
-                                        .add(new DoubleTag("", player.y + player.getEyeHeight()))
-                                        .add(new DoubleTag("", player.z)))
-                                .putList(new ListTag<DoubleTag>("Motion")
-                                        .add(new DoubleTag("", -Math.sin(player.yaw / 180 * Math.PI) * Math.cos(player.pitch / 180 * Math.PI)))
-                                        .add(new DoubleTag("", -Math.sin(player.pitch / 180 * Math.PI)))
-                                        .add(new DoubleTag("", Math.cos(player.yaw / 180 * Math.PI) * Math.cos(player.pitch / 180 * Math.PI))))
-                                .putList(new ListTag<FloatTag>("Rotation")
-                                        .add(new FloatTag("", (player.yaw > 180 ? 360 : 0) - (float) player.yaw - 10))
-                                        .add(new FloatTag("", (float) -player.pitch)));
-                        EntityArrow arrow1 = (EntityArrow) Entity.createEntity(EntityArrow.NETWORK_ID, player.chunk, nbt1, player, false, true);
-                        arrow1.setPickupMode(EntityProjectile.PICKUP_NONE_REMOVE);
-                        if (arrowData > 0) {
-                            arrow1.setData(arrowData);
+                        double force = entityShootBowEvent.getForce();
+                        double baseMotionX = -Math.sin(player.yaw / 180 * Math.PI) * Math.cos(player.pitch / 180 * Math.PI);
+                        double baseMotionY = -Math.sin(player.pitch / 180 * Math.PI);
+                        double baseMotionZ = Math.cos(player.yaw / 180 * Math.PI) * Math.cos(player.pitch / 180 * Math.PI);
+                        for (double spreadAngle : new double[]{-10.0, 10.0}) {
+                            double rad = Math.toRadians(spreadAngle);
+                            double cos = Math.cos(rad);
+                            double sin = Math.sin(rad);
+                            double rotatedX = baseMotionX * cos - baseMotionZ * sin;
+                            double rotatedZ = baseMotionX * sin + baseMotionZ * cos;
+                            CompoundTag sideNbt = new CompoundTag()
+                                    .putList(new ListTag<DoubleTag>("Pos")
+                                            .add(new DoubleTag("", player.x))
+                                            .add(new DoubleTag("", player.y + player.getEyeHeight()))
+                                            .add(new DoubleTag("", player.z)))
+                                    .putList(new ListTag<DoubleTag>("Motion")
+                                            .add(new DoubleTag("", rotatedX))
+                                            .add(new DoubleTag("", baseMotionY))
+                                            .add(new DoubleTag("", rotatedZ)))
+                                    .putList(new ListTag<FloatTag>("Rotation")
+                                            .add(new FloatTag("", (player.yaw > 180 ? 360 : 0) - (float) player.yaw + (float) spreadAngle))
+                                            .add(new FloatTag("", (float) -player.pitch)));
+                            EntityArrow sideArrow = (EntityArrow) Entity.createEntity(EntityArrow.NETWORK_ID, player.chunk, sideNbt, player, true, true);
+                            sideArrow.setPickupMode(EntityProjectile.PICKUP_NONE_REMOVE);
+                            if (arrowData > 0) {
+                                sideArrow.setData(arrowData);
+                            }
+                            if (piercingEnchant != null) { // Illegal enchantment (Multishot + Piercing)
+                                sideArrow.piercing = piercingEnchant.getLevel();
+                            }
+                            sideArrow.setMotion(sideArrow.getMotion().multiply(force));
+                            sideArrow.spawnToAll();
                         }
-                        if (this.hasEnchantment(Enchantment.ID_CROSSBOW_PIERCING)) { // Illegal enchantment
-                            arrow1.piercing = 1;
-                        }
-                        arrow1.setMotion(arrow1.getMotion().multiply(entityShootBowEvent.getForce()).add(-0.3, 0, 0.3));
-                        arrow1.spawnToAll();
-                        CompoundTag nbt2 = new CompoundTag()
-                                .putList(new ListTag<DoubleTag>("Pos")
-                                        .add(new DoubleTag("", player.x))
-                                        .add(new DoubleTag("", player.y + player.getEyeHeight()))
-                                        .add(new DoubleTag("", player.z)))
-                                .putList(new ListTag<DoubleTag>("Motion")
-                                        .add(new DoubleTag("", -Math.sin(player.yaw / 180 * Math.PI) * Math.cos(player.pitch / 180 * Math.PI)))
-                                        .add(new DoubleTag("", -Math.sin(player.pitch / 180 * Math.PI)))
-                                        .add(new DoubleTag("", Math.cos(player.yaw / 180 * Math.PI) * Math.cos(player.pitch / 180 * Math.PI))))
-                                .putList(new ListTag<FloatTag>("Rotation")
-                                        .add(new FloatTag("", (player.yaw > 180 ? 360 : 0) - (float) player.yaw + 10))
-                                        .add(new FloatTag("", (float) -player.pitch)));
-                        EntityArrow arrow2 = (EntityArrow) Entity.createEntity(EntityArrow.NETWORK_ID, player.chunk, nbt2, player, false, true);
-                        arrow2.setPickupMode(EntityProjectile.PICKUP_NONE_REMOVE);
-                        if (arrowData > 0) {
-                            arrow2.setData(arrowData);
-                        }
-                        if (this.hasEnchantment(Enchantment.ID_CROSSBOW_PIERCING)) { // Illegal enchantment
-                            arrow2.piercing = 1;
-                        }
-                        arrow2.setMotion(arrow2.getMotion().multiply(entityShootBowEvent.getForce()).add(0.3, 0, -0.3));
-                        arrow2.spawnToAll();
                     }
                     player.getLevel().addLevelSoundEvent(player, LevelSoundEventPacket.SOUND_CROSSBOW_SHOOT);
+
+                    // Durability on fire: 1 arrow, 3 firework, 3 multishot arrows, 9 multishot fireworks
+                    if (!player.isCreative() && !this.isUnbreakable()) {
+                        boolean hasMultishot = this.hasEnchantment(Enchantment.ID_CROSSBOW_MULTISHOT);
+                        int durabilityCost;
+                        if (isFirework) {
+                            durabilityCost = hasMultishot ? 9 : 3;
+                        } else {
+                            durabilityCost = hasMultishot ? 3 : 1;
+                        }
+                        Enchantment durability = this.getEnchantment(Enchantment.ID_DURABILITY);
+                        if (!(durability != null && durability.getLevel() > 0 && (100 / (durability.getLevel() + 1)) <= ThreadLocalRandom.current().nextInt(100))) {
+                            this.setDamage(this.getDamage() + durabilityCost);
+                            if (this.getDamage() >= DURABILITY_CROSSBOW) {
+                                this.count--;
+                            }
+                        }
+                    }
+
                     this.setCompoundTag(this.getNamedTag().putBoolean("Charged", false).remove("chargedItem"));
                     player.getInventory().setItemInHand(this);
                 }
@@ -205,10 +214,16 @@ public class ItemCrossbow extends ItemBow {
 
     @Override
     public boolean onUse(Player player, int ticksUsed) {
+        // Quick Charge: 25/19/13/6 ticks for level 0/I/II/III
         int needTickUsed = 25;
         Enchantment enchantment = this.getEnchantment(Enchantment.ID_CROSSBOW_QUICK_CHARGE);
         if (enchantment != null) {
-            needTickUsed -= enchantment.getLevel() * 5; //0.25s
+            int level = enchantment.getLevel();
+            switch (level) {
+                case 1: needTickUsed = 19; break;
+                case 2: needTickUsed = 13; break;
+                default: needTickUsed = 6; break; // QC III+
+            }
         }
 
         if (ticksUsed < needTickUsed) {
@@ -224,7 +239,7 @@ public class ItemCrossbow extends ItemBow {
             offhand = true;
         } else {
             for (Item i : player.getInventory().getContents().values()) {
-                if (i.getId() == ItemID.ARROW) {
+                if (i.getId() == ItemID.ARROW || i.getId() == ItemID.FIREWORKS) {
                     itemArrow = i.clone();
                     itemArrow.setCount(1);
                     break;
@@ -242,16 +257,6 @@ public class ItemCrossbow extends ItemBow {
 
         if (!this.isLoaded()) {
             if (!player.isCreative()) {
-                if (!this.isUnbreakable()) {
-                    Enchantment durability = this.getEnchantment(Enchantment.ID_DURABILITY);
-                    if (!(durability != null && durability.getLevel() > 0 && (100 / (durability.getLevel() + 1)) <= ThreadLocalRandom.current().nextInt(100))) {
-                        this.setDamage(this.getDamage() + 2);
-                        if (this.getDamage() >= DURABILITY_CROSSBOW) {
-                            this.count--;
-                        }
-                    }
-                }
-
                 if (offhand) {
                     player.getOffhandInventory().removeItem(itemArrow);
                 } else {
@@ -260,7 +265,10 @@ public class ItemCrossbow extends ItemBow {
             }
 
             player.getInventory().setItemInHand(this.loadArrow(itemArrow));
-            player.getLevel().addLevelSoundEvent(player, LevelSoundEventPacket.SOUND_CROSSBOW_LOADING_END);
+            boolean hasQuickCharge = enchantment != null;
+            player.getLevel().addLevelSoundEvent(player, hasQuickCharge
+                    ? LevelSoundEventPacket.SOUND_CROSSBOW_QUICK_CHARGE_END
+                    : LevelSoundEventPacket.SOUND_CROSSBOW_LOADING_END);
         }
 
         return true;

@@ -88,6 +88,7 @@ public class LevelEventPacket extends DataPacket {
     public static final int EVENT_PARTICLE_SCULK_CHARGE = 2037;
     public static final int EVENT_PARTICLE_SCULK_CHARGE_POP = 2038;
     public static final int EVENT_PARTICLE_SONIC_EXPLOSION = 2039;
+    public static final int EVENT_PARTICLE_SMASH_ATTACK_GROUND_DUST = 9815;
 
     public static final int EVENT_SOUND_BUTTON_CLICK = 3500;
     public static final int EVENT_SOUND_EXPLODE = 3501;

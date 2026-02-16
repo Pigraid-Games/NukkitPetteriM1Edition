@@ -158,14 +158,14 @@ public class EntityPiglin extends EntityWalkingMob implements InventoryHolder {
 
                 this.attackDelay = 0;
 
-                EntityArrow shot = (EntityArrow) Entity.createEntity("Arrow", this.add(0, this.getEyeHeight(), 0), this);
+                EntityArrow shot = (EntityArrow) Entity.createEntity("Arrow", this.add(0, this.getEyeHeight(), 0), this, true, true);
 
                 if (shot.level.hasCollisionBlocks(shot, shot.boundingBox)) {
                     shot.close();
                     return;
                 }
 
-                EntityShootBowEvent ev = new EntityShootBowEvent(this, Item.get(Item.ARROW, 0, 1), shot, 2);
+                EntityShootBowEvent ev = new EntityShootBowEvent(this, handItem, shot, 3.5);
                 this.server.getPluginManager().callEvent(ev);
 
                 shot.setMotion(player.add(Utils.rand(-0.1, 0.1), Utils.rand(-0.1, 0.1) + 0.3, Utils.rand(-0.1, 0.1)).subtract(this).normalize().multiply(ev.getForce()));
@@ -179,7 +179,6 @@ public class EntityPiglin extends EntityWalkingMob implements InventoryHolder {
                     if (launch.isCancelled()) {
                         projectile.close();
                     } else {
-                        projectile.namedTag.putDouble("damage", 4);
                         projectile.updateRotation();
                         projectile.spawnToAll();
                         ((EntityArrow) projectile).setPickupMode(EntityArrow.PICKUP_NONE);

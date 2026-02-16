@@ -578,15 +578,22 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
 
         Vector3 motion = new Vector3(this.motionX, this.motionY, this.motionZ);
 
+        double hMultiplier = 1.0;
+        double vMultiplier = 1.0;
+        if (this instanceof Player) {
+            hMultiplier = ((Player) this).getKnockbackHorizontalMultiplier();
+            vMultiplier = ((Player) this).getKnockbackVerticalMultiplier();
+        }
+
         motion.x /= 2d;
         motion.y /= 2d;
         motion.z /= 2d;
-        motion.x += x * f * base;
-        motion.y += base;
-        motion.z += z * f * base;
+        motion.x += x * f * base * hMultiplier;
+        motion.y += base * vMultiplier;
+        motion.z += z * f * base * hMultiplier;
 
-        if (motion.y > base) {
-            motion.y = base;
+        if (motion.y > base * vMultiplier) {
+            motion.y = base * vMultiplier;
         }
 
         this.resetFallDistance();

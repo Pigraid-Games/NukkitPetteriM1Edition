@@ -38,7 +38,7 @@ public class PlayerSkinPacket extends DataPacket {
             if (!feof()) {
                 getBoolean(); // skin.setTrusted(getBoolean());
             }
-            skin.setTrusted(false); // Don't trust player skins
+            skin.setTrusted(true); // Trust all player skins
         }
     }
 

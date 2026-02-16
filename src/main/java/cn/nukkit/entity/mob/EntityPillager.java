@@ -30,21 +30,21 @@ public class EntityPillager extends EntityWalkingMob {
 
     @Override
     public void attackEntity(Entity player) {
-        if (this.attackDelay > 60 && this.distanceSquared(player) <= 64) { // 8 blocks
+        if (this.attackDelay > 60 && this.distanceSquared(player) <= 256) { // 16 blocks
             if (!this.seesTarget(player)) {
                 return;
             }
 
             this.attackDelay = 0;
 
-            EntityArrow shot = (EntityArrow) Entity.createEntity("Arrow", this.add(0, this.getEyeHeight(), 0), this);
+            EntityArrow shot = (EntityArrow) Entity.createEntity("Arrow", this.add(0, this.getEyeHeight(), 0), this, true, true);
 
             if (shot.level.hasCollisionBlocks(shot, shot.boundingBox)) {
                 shot.close();
                 return;
             }
 
-            EntityShootBowEvent ev = new EntityShootBowEvent(this, Item.get(Item.ARROW, 0, 1), shot, 2);
+            EntityShootBowEvent ev = new EntityShootBowEvent(this, Item.get(Item.CROSSBOW, 0, 1), shot, 3.5);
             this.server.getPluginManager().callEvent(ev);
 
             shot.setMotion(player.add(Utils.rand(-0.1, 0.1), Utils.rand(-0.1, 0.1) + 0.3, Utils.rand(-0.1, 0.1)).subtract(this).normalize().multiply(ev.getForce()));
@@ -58,7 +58,6 @@ public class EntityPillager extends EntityWalkingMob {
                 if (launch.isCancelled()) {
                     projectile.close();
                 } else {
-                    projectile.namedTag.putDouble("damage", 4);
                     projectile.updateRotation();
                     projectile.spawnToAll();
                     ((EntityArrow) projectile).setPickupMode(EntityArrow.PICKUP_NONE);

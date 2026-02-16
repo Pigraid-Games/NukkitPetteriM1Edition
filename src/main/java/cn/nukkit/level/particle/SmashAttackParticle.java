@@ -1,0 +1,25 @@
+package cn.nukkit.level.particle;
+
+import cn.nukkit.math.Vector3;
+import cn.nukkit.network.protocol.DataPacket;
+import cn.nukkit.network.protocol.LevelEventPacket;
+
+public class SmashAttackParticle extends Particle {
+
+    public SmashAttackParticle(Vector3 pos) {
+        super(pos.x, pos.y, pos.z);
+    }
+
+    @Override
+    public DataPacket[] mvEncode(int protocol) {
+        LevelEventPacket packet = new LevelEventPacket();
+        packet.evid = LevelEventPacket.EVENT_PARTICLE_SMASH_ATTACK_GROUND_DUST;
+        packet.x = (float) this.x;
+        packet.y = (float) this.y;
+        packet.z = (float) this.z;
+        packet.data = 0;
+        packet.protocol = protocol;
+        packet.tryEncode();
+        return new DataPacket[]{packet};
+    }
+}

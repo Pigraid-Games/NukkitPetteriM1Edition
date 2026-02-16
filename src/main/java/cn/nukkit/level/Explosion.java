@@ -470,4 +470,8 @@ public class Explosion {
     public void setMinHeight(double minHeight) {
         this.minHeight = minHeight;
     }
+
+    public void setDoesDamage(boolean doesDamage) {
+        this.doesDamage = doesDamage;
+    }
 }

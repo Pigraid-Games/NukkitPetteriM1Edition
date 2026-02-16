@@ -2,6 +2,7 @@ package cn.nukkit.item.enchantment.damage;
 
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.EntitySmite;
+import cn.nukkit.item.Item;
 
 /**
  * @author MagicDroidX
@@ -11,6 +12,11 @@ public class EnchantmentDamageSmite extends EnchantmentDamage {
 
     public EnchantmentDamageSmite() {
         super(ID_DAMAGE_SMITE, "undead", Rarity.UNCOMMON, TYPE.SMITE);
+    }
+
+    @Override
+    public boolean canEnchant(Item item) {
+        return item.isMace() || super.canEnchant(item);
     }
 
     @Override

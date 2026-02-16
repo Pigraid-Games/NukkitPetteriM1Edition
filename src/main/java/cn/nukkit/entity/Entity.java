@@ -2090,24 +2090,25 @@ public abstract class Entity extends Location implements Metadatable {
 
             AxisAlignedBB axisalignedbb = this.boundingBox.clone();
 
-            AxisAlignedBB[] list = this.noClip ? new AxisAlignedBB[0] : this.level.getCollisionCubes(this, this.boundingBox.addCoord(dx, dy, dz), false);
+            AxisAlignedBB[] list = this.noClip ? new AxisAlignedBB[0] : this.level.getCollisionCubes(this, this.boundingBox.addCoordPooled(dx, dy, dz), false);
 
-            for (AxisAlignedBB bb : list) {
-                dy = bb.calculateYOffset(this.boundingBox, dy);
+            final int len = list.length;
+            for (int i = 0; i < len; i++) {
+                dy = list[i].calculateYOffset(this.boundingBox, dy);
             }
 
             this.boundingBox.offset(0, dy, 0);
 
             boolean fallingFlag = (this.onGround || (dy != movY && movY < 0));
 
-            for (AxisAlignedBB bb : list) {
-                dx = bb.calculateXOffset(this.boundingBox, dx);
+            for (int i = 0; i < len; i++) {
+                dx = list[i].calculateXOffset(this.boundingBox, dx);
             }
 
             this.boundingBox.offset(dx, 0, 0);
 
-            for (AxisAlignedBB bb : list) {
-                dz = bb.calculateZOffset(this.boundingBox, dz);
+            for (int i = 0; i < len; i++) {
+                dz = list[i].calculateZOffset(this.boundingBox, dz);
             }
 
             this.boundingBox.offset(0, 0, dz);
@@ -2124,29 +2125,30 @@ public abstract class Entity extends Location implements Metadatable {
 
                 this.boundingBox.setBB(axisalignedbb);
 
-                list = this.level.getCollisionCubes(this, this.boundingBox.addCoord(dx, dy, dz), false);
+                list = this.level.getCollisionCubes(this, this.boundingBox.addCoordPooled(dx, dy, dz), false);
 
-                for (AxisAlignedBB bb : list) {
-                    dy = bb.calculateYOffset(this.boundingBox, dy);
+                final int stepLen = list.length;
+                for (int i = 0; i < stepLen; i++) {
+                    dy = list[i].calculateYOffset(this.boundingBox, dy);
                 }
 
                 this.boundingBox.offset(0, dy, 0);
 
-                for (AxisAlignedBB bb : list) {
-                    dx = bb.calculateXOffset(this.boundingBox, dx);
+                for (int i = 0; i < stepLen; i++) {
+                    dx = list[i].calculateXOffset(this.boundingBox, dx);
                 }
 
                 this.boundingBox.offset(dx, 0, 0);
 
-                for (AxisAlignedBB bb : list) {
-                    dz = bb.calculateZOffset(this.boundingBox, dz);
+                for (int i = 0; i < stepLen; i++) {
+                    dz = list[i].calculateZOffset(this.boundingBox, dz);
                 }
 
                 this.boundingBox.offset(0, 0, dz);
 
                 double reverseDY = -dy;
-                for (AxisAlignedBB bb : list) {
-                    reverseDY = bb.calculateYOffset(this.boundingBox, reverseDY);
+                for (int i = 0; i < stepLen; i++) {
+                    reverseDY = list[i].calculateYOffset(this.boundingBox, reverseDY);
                 }
                 dy += reverseDY;
                 this.boundingBox.offset(0, reverseDY, 0);

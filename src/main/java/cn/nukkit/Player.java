@@ -48,6 +48,7 @@ import cn.nukkit.inventory.transaction.data.UseItemOnEntityData;
 import cn.nukkit.item.*;
 import cn.nukkit.item.custom.CustomItemManager;
 import cn.nukkit.item.enchantment.Enchantment;
+import cn.nukkit.item.enchantment.mace.EnchantmentWindBurst;
 import cn.nukkit.item.food.Food;
 import cn.nukkit.lang.TextContainer;
 import cn.nukkit.lang.TranslationContainer;
@@ -56,6 +57,7 @@ import cn.nukkit.level.format.FullChunk;
 import cn.nukkit.level.format.generic.BaseFullChunk;
 import cn.nukkit.level.particle.ItemBreakParticle;
 import cn.nukkit.level.particle.PunchBlockParticle;
+import cn.nukkit.level.particle.SmashAttackParticle;
 import cn.nukkit.math.*;
 import cn.nukkit.metadata.MetadataValue;
 import cn.nukkit.nbt.NBTIO;
@@ -300,6 +302,18 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
     private BlockFace breakingBlockFace; // Block face player is breaking currently
     public long firstBlockBreak; // A slightly shorter break time for first block
     private double lastBreakTime; // Store last block break time to determine if firstBlockBreak is valid
+
+    // Attack cooldown tracking to prevent double-hit exploit
+    private long lastAttackTime = 0;
+    private static final long DEFAULT_ATTACK_COOLDOWN_MS = 500; // 10 ticks at 20 TPS
+    @Getter @Setter
+    private long attackCooldownMs = DEFAULT_ATTACK_COOLDOWN_MS;
+    @Getter @Setter
+    private double knockbackHorizontalMultiplier = 1.0;
+    @Getter @Setter
+    private double knockbackVerticalMultiplier = 1.0;
+    @Getter @Setter
+    private float gravityMultiplier = 1.0f;
     private PlayerBlockActionData lastBlockAction;
     public EntityFishingHook fishing;
     @Getter
@@ -436,7 +450,9 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
     @Override
     public void addMovement(double x, double y, double z, double yaw, double pitch, double headYaw) {
-        this.sendPositionToViewers(x, y, z, yaw, pitch, headYaw);
+        // Use MoveEntityAbsolutePacket instead of MovePlayerPacket for smoother movement
+        // Add base offset to Y for proper rendering (like sendPositionToViewers did)
+        this.level.addEntityMovement(this, x, y + this.getBaseOffset(), z, yaw, pitch, headYaw);
     }
 
     /**
@@ -957,7 +973,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         if (!this.onGround || movX != 0 || movY != 0 || movZ != 0) {
             boolean onGround = false;
 
-            AxisAlignedBB bb = this.boundingBox.clone();
+            AxisAlignedBB bb = cn.nukkit.math.SimpleAxisAlignedBBPool.copyOf(this.boundingBox);
             bb.setMaxY(bb.getMinY() + 0.5);
             bb.setMinY(bb.getMinY() - 1);
 
@@ -1480,6 +1496,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
         this.noDamageTicks = 60;
         this.setAirTicks(400);
+        this.lastAttackTime = 0; // Reset attack cooldown on first spawn
 
         if (this.hasPermission(Server.BROADCAST_CHANNEL_USERS)) {
             this.server.getPluginManager().subscribeToPermission(Server.BROADCAST_CHANNEL_USERS, this);
@@ -3383,18 +3400,20 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                 Entity targetEntity = interactPacket.target == this.getId() ? this : this.level.getEntity(interactPacket.target);
 
                 if (targetEntity == null || !this.isAlive() || !targetEntity.isAlive()) {
-                    if (interactPacket.target > Entity.entityCount) {
-                        this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true);
-                    }
+                    // Disabled anti-cheat kick for invalid entity interactions
+                    // if (interactPacket.target > Entity.entityCount) {
+                    //     this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true);
+                    // }
                     if (targetEntity != null || interactPacket.action != InteractPacket.ACTION_OPEN_INVENTORY) {
                         return;
                     }
                 }
 
-                if (targetEntity instanceof EntityItem || targetEntity instanceof EntityArrow || targetEntity instanceof EntityXPOrb) {
-                    this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true, "targetEntity=" + targetEntity.getClass().getSimpleName());
-                    return;
-                }
+                // Disabled anti-cheat kick for invalid entity interactions
+                // if (targetEntity instanceof EntityItem || targetEntity instanceof EntityArrow || targetEntity instanceof EntityXPOrb) {
+                //     this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true, "targetEntity=" + targetEntity.getClass().getSimpleName());
+                //     return;
+                // }
 
                 switch (interactPacket.action) {
                     case InteractPacket.ACTION_OPEN_INVENTORY:
@@ -4284,7 +4303,10 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                             item.onUse(this, ticksUsed); // Load crossbow
                                         } else {
                                             this.setUsingItem(true);
-                                            this.getLevel().addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_CROSSBOW_LOADING_START);
+                                            boolean hasQuickCharge = crossbow.hasEnchantment(Enchantment.ID_CROSSBOW_QUICK_CHARGE);
+                                            this.getLevel().addLevelSoundEvent(this, hasQuickCharge
+                                                    ? LevelSoundEventPacket.SOUND_CROSSBOW_QUICK_CHARGE_START
+                                                    : LevelSoundEventPacket.SOUND_CROSSBOW_LOADING_START);
                                         }
                                     }
                                     return;
@@ -4327,17 +4349,24 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
                         Entity target = this.level.getEntity(useItemOnEntityData.entityRuntimeId);
                         if (target == null) {
-                            if (useItemOnEntityData.entityRuntimeId > Entity.entityCount) {
-                                this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true);
-                            }
+                            // Disabled anti-cheat kick for invalid entity interactions
+                            // if (useItemOnEntityData.entityRuntimeId > Entity.entityCount) {
+                            //     this.kick(PlayerKickEvent.Reason.INVALID_PVE, "Attempting to interact with an invalid entity", true);
+                            // }
                             return;
                         }
 
-                        if (inventory.getHeldItemIndex() != useItemOnEntityData.hotbarSlot) {
-                            inventory.equipItem(useItemOnEntityData.hotbarSlot);
-                        }
-
+                        // Use server-tracked held item, do not trust client hotbarSlot
                         item = this.inventory.getItemInHand();
+
+                        // Log mismatch for potential anti-cheat detection
+                        if (inventory.getHeldItemIndex() != useItemOnEntityData.hotbarSlot) {
+                            if (server.suomiCraftPEMode()) { // Only log in anti-cheat mode
+                                getServer().getLogger().debug("Player " + getName() +
+                                    " attack packet hotbarSlot mismatch: client=" +
+                                    useItemOnEntityData.hotbarSlot + " server=" + inventory.getHeldItemIndex());
+                            }
+                        }
 
                         /*if (!useItemOnEntityData.itemInHand.equals(item)) {
                             this.needSendHeldItem = true;
@@ -4420,6 +4449,13 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                     this.setSprinting(false);
                                 }
 
+                                // Attack cooldown check - prevent double-hit exploit
+                                long currentTime = System.currentTimeMillis();
+                                if (currentTime - this.lastAttackTime < this.attackCooldownMs) {
+                                    // Attack too soon - block it
+                                    return;
+                                }
+
                                 // Anti kill aura
                                 if (this.attacksPerTick > 10 && server.suomiCraftPEMode()) {
                                     return;
@@ -4431,6 +4467,32 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                 float itemDamage = item.getAttackDamage();
                                 for (Enchantment enchantment : enchantments) {
                                     itemDamage += enchantment.getDamageBonus(target);
+                                }
+
+                                // Mace smash attack
+                                boolean isMaceSmashAttack = false;
+                                float blocksFallen = 0;
+                                if (item.isMace()) {
+                                    blocksFallen = (float) (this.highestPosition - this.y);
+                                    if (blocksFallen > 1.5f) {
+                                        isMaceSmashAttack = true;
+                                        // Tiered damage: first 3 blocks +4/block, 4-8 +2/block, 9+ +1/block
+                                        float smashDamage = 0;
+                                        if (blocksFallen <= 3) {
+                                            smashDamage = blocksFallen * 4;
+                                        } else if (blocksFallen <= 8) {
+                                            smashDamage = 3 * 4 + (blocksFallen - 3) * 2;
+                                        } else {
+                                            smashDamage = 3 * 4 + 5 * 2 + (blocksFallen - 8);
+                                        }
+                                        itemDamage += smashDamage;
+
+                                        // Density enchantment bonus: +0.5 damage per block fallen per level
+                                        Enchantment densityEnchant = item.getEnchantment(Enchantment.ID_DENSITY);
+                                        if (densityEnchant != null) {
+                                            itemDamage += densityEnchant.getLevel() * 0.5f * blocksFallen;
+                                        }
+                                    }
                                 }
 
                                 Map<DamageModifier, Float> damage = new EnumMap<>(DamageModifier.class);
@@ -4457,6 +4519,49 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                         this.needSendHeldItem = true;
                                     }
                                     return;
+                                }
+
+                                // Update attack timestamp after successful attack
+                                this.lastAttackTime = currentTime;
+
+                                // Mace smash post-hit effects
+                                if (isMaceSmashAttack) {
+                                    // Reset all vertical momentum and negate fall damage
+                                    this.motionY = 0;
+                                    this.resetFallDistance();
+
+                                    // Knockback nearby entities (radius ~3.5 blocks)
+                                    Entity[] nearbyEntities = this.level.getNearbyEntities(target.boundingBox.grow(3.5, 3.5, 3.5), this);
+                                    for (Entity nearby : nearbyEntities) {
+                                        if (nearby.getId() == target.getId()) continue;
+                                        double kbDx = nearby.x - target.x;
+                                        double kbDz = nearby.z - target.z;
+                                        double kbDist = Math.sqrt(kbDx * kbDx + kbDz * kbDz);
+                                        if (kbDist > 0 && kbDist <= 3.5) {
+                                            double force = (3.5 - kbDist) / 3.5 * 0.7;
+                                            nearby.setMotion(new Vector3(kbDx / kbDist * force, 0.3 * force, kbDz / kbDist * force));
+                                        }
+                                    }
+
+                                    // Wind Burst enchantment: launch attacker upward
+                                    Enchantment windBurstEnchant = item.getEnchantment(Enchantment.ID_WIND_BURST);
+                                    if (windBurstEnchant != null) {
+                                        double launchVelocity = ((EnchantmentWindBurst) windBurstEnchant).getLaunchVelocity();
+                                        this.setMotion(new Vector3(this.motionX, launchVelocity, this.motionZ));
+                                    }
+
+                                    // Vanilla mace smash ground dust particle (client resolves block texture from position)
+                                    this.level.addParticle(new SmashAttackParticle(target));
+
+                                    // Sounds
+                                    if (blocksFallen > 8) {
+                                        this.level.addLevelSoundEvent(target, LevelSoundEventPacket.SOUND_MACE_HEAVY_SMASH_GROUND);
+                                    } else {
+                                        this.level.addLevelSoundEvent(target, LevelSoundEventPacket.SOUND_MACE_SMASH_GROUND);
+                                    }
+                                } else if (item.isMace()) {
+                                    // Normal mace swing sound (no smash)
+                                    this.level.addLevelSoundEvent(target, LevelSoundEventPacket.SOUND_MACE_SMASH_AIR);
                                 }
 
                                 for (Enchantment enchantment : item.getEnchantments()) {
@@ -4923,7 +5028,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         double maxOffset = (Math.abs(this.x) >= 1048576 || Math.abs(this.z) >= 1048576) ? 0.1 : 0.05;
 
         // Replacement for this.fastMove(dx, dy, dz) start
-        if (this.isSpectator() || !this.level.hasCollision(this, this.boundingBox.getOffsetBoundingBox(dx, dy, dz).shrink(maxOffset, server.suomiCraftPEMode() ? 0.05 : this.getStepHeight(), maxOffset), false)) {
+        if (this.isSpectator() || !this.level.hasCollision(this, this.boundingBox.getOffsetBoundingBoxPooled(dx, dy, dz).shrinkPooled(maxOffset, server.suomiCraftPEMode() ? 0.05 : this.getStepHeight(), maxOffset), false)) {
             this.x = newPos.x;
             this.y = newPos.y;
             this.z = newPos.z;
@@ -4934,7 +5039,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         this.checkChunks();
 
         if (!this.isSpectator() && (!this.onGround || dy != 0)) {
-            AxisAlignedBB bb = this.boundingBox.clone();
+            AxisAlignedBB bb = cn.nukkit.math.SimpleAxisAlignedBBPool.copyOf(this.boundingBox);
             bb.setMinY(bb.getMinY() - 0.25);
 
             // Hack: fix fall damage from walls while falling
@@ -6802,6 +6907,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         this.deadTicks = 0;
         this.noDamageTicks = 60;
         this.timeSinceRest = 0;
+        this.lastAttackTime = 0; // Reset attack cooldown on respawn
 
         this.removeAllEffects(EntityPotionEffectEvent.Cause.DEATH);
         this.setHealth(this.getMaxHealth());
@@ -7863,6 +7969,11 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         if (this.motionY > 0) {
             this.startAirTicks = (int) ((-(Math.log(this.getGravity() / (this.getGravity() + this.getDrag() * this.motionY))) / this.getDrag()) * 2 + 5);
         }
+    }
+
+    @Override
+    protected float getGravity() {
+        return super.getGravity() * this.gravityMultiplier;
     }
 
     @Override

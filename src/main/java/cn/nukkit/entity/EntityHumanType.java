@@ -11,6 +11,7 @@ import cn.nukkit.inventory.PlayerOffhandInventory;
 import cn.nukkit.item.Item;
 import cn.nukkit.item.ItemSkull;
 import cn.nukkit.item.enchantment.Enchantment;
+import cn.nukkit.item.enchantment.mace.EnchantmentBreach;
 import cn.nukkit.level.format.FullChunk;
 import cn.nukkit.math.NukkitMath;
 import cn.nukkit.nbt.NBTIO;
@@ -54,7 +55,21 @@ public abstract class EntityHumanType extends EntityCreature implements Inventor
             //source.setDamage(source.getDamage(EntityDamageEvent.DamageModifier.ARMOR_ENCHANTMENTS) - (originalDamage - originalDamage * (1 - epf / 25f)), EntityDamageEvent.DamageModifier.ARMOR_ENCHANTMENTS);
 
             if (source.canBeReducedByArmor()) {
-                source.setDamage(-source.getFinalDamage() * armorPoints * 0.04f, EntityDamageEvent.DamageModifier.ARMOR);
+                float armorReduction = armorPoints * 0.04f;
+
+                // Breach enchantment: reduce armor effectiveness
+                if (source instanceof EntityDamageByEntityEvent) {
+                    Item weapon = source.getWeapon();
+                    if (weapon != null && weapon.isMace()) {
+                        Enchantment breachEnchant = weapon.getEnchantment(Enchantment.ID_BREACH);
+                        if (breachEnchant != null) {
+                            float bypassFactor = ((EnchantmentBreach) breachEnchant).getArmorBypassFactor();
+                            armorReduction *= (1.0f - Math.min(bypassFactor, 1.0f));
+                        }
+                    }
+                }
+
+                source.setDamage(-source.getFinalDamage() * armorReduction, EntityDamageEvent.DamageModifier.ARMOR);
             }
 
             source.setDamage(-source.getFinalDamage() * Math.min(NukkitMath.ceilFloat(Math.min(epf, 25) * ((float) ThreadLocalRandom.current().nextInt(50, 100) / 100)), 20) * 0.04f,

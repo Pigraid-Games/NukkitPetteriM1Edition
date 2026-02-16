@@ -27,6 +27,11 @@ public class ItemMace extends ItemTool {
     }
 
     @Override
+    public boolean isMace() {
+        return true;
+    }
+
+    @Override
     public boolean isSupportedOn(int protocol) {
         return protocol >= ProtocolInfo.v1_21_0;
     }

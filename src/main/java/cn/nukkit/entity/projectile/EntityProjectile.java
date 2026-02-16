@@ -19,6 +19,8 @@ import cn.nukkit.math.Vector3;
 import cn.nukkit.nbt.tag.CompoundTag;
 import lombok.Getter;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -60,6 +62,7 @@ public abstract class EntityProjectile extends Entity {
     protected int collidedTick;
     public boolean hadCollision = false;
     public int piercing;
+    private final Set<Long> piercedEntities = new HashSet<>();
 
     public EntityProjectile(FullChunk chunk, CompoundTag nbt) {
         this(chunk, nbt, null);
@@ -158,7 +161,13 @@ public abstract class EntityProjectile extends Entity {
             }
         }
 
-        this.close();
+        if (this.piercing > 0) {
+            this.piercedEntities.add(entity.getId());
+            this.piercing--;
+            this.hadCollision = false;
+        } else {
+            this.close();
+        }
     }
 
     protected void onHit() {
@@ -216,7 +225,8 @@ public abstract class EntityProjectile extends Entity {
 
             for (Entity entity : list) {
                 if (/*!entity.canCollideWith(this) || */(entity == this.shootingEntity && this.age < 5) || (entity instanceof Player && ((Player) entity).getGamemode() == Player.SPECTATOR) ||
-                        (this instanceof EntityEnderCharge && entity instanceof EntityEnderDragon)) {
+                        (this instanceof EntityEnderCharge && entity instanceof EntityEnderDragon) ||
+                        this.piercedEntities.contains(entity.getId())) {
                     continue;
                 }
 

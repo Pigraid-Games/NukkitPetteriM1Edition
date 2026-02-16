@@ -486,6 +486,9 @@ public class LevelSoundEventPacket extends DataPacket {
     public static final int SOUND_DECORATED_POT_INSERT_FAILED = 483;
     public static final int SOUND_COPPER_BULB_ON = 490;
     public static final int SOUND_COPPER_BULB_OFF = 491;
+    public static final int SOUND_MACE_SMASH_AIR = 514;
+    public static final int SOUND_MACE_SMASH_GROUND = 515;
+    public static final int SOUND_MACE_HEAVY_SMASH_GROUND = 520;
 
     public int sound;
     public float x;
