@@ -1765,12 +1765,6 @@ public abstract class Entity extends Location implements Metadatable {
         this.setLevel(chunk.getProvider().getLevel());
         this.server = chunk.getProvider().getLevel().getServer();
 
-        if (!this.server.isPrimaryThread() && !this.level.isBeingConverted) {
-            if (this.server.suomiCraftPEMode())
-                this.server.getLogger().warning("Entity initialized asynchronously: " + this.getClass().getSimpleName(), new Throwable(""));
-            else
-                this.server.getLogger().warning("Entity initialized asynchronously: " + this.getClass().getSimpleName());
-        }
 
         this.boundingBox = new SimpleAxisAlignedBB(0, 0, 0, 0, 0, 0);
 
