@@ -431,6 +431,10 @@ public class Server {
      */
     public boolean reduceTraffic;
     /**
+     * Mute emote chat announcements.
+     */
+    public boolean muteEmoteChat;
+    /**
      * Don't disable client's own packs when force-resources is enabled.
      */
     boolean forceResourcesAllowOwnPacks;
@@ -2491,6 +2495,7 @@ public class Server {
         this.unsafeRedstone = this.getPropertyBoolean("unsafe-redstone", true);
         this.attackStopSprint = this.getPropertyBoolean("attack-stop-sprint", true);
         this.reduceTraffic = this.getPropertyBoolean("reduce-traffic", false);
+        this.muteEmoteChat = this.getPropertyBoolean("mute-emote-chat", false);
         this.encryptionEnabled = this.getPropertyBoolean("encryption", true);
         this.ignoreUnbreakableItems = this.getPropertyBoolean("ignore-unbreakable-items", false);
         this.chunkUnloadDelay = this.getPropertyInt("chunk-unload-delay", 30) * 1000;
