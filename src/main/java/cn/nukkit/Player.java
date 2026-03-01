@@ -36,9 +36,12 @@ import cn.nukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import cn.nukkit.event.server.DataPacketReceiveEvent;
 import cn.nukkit.event.server.DataPacketSendEvent;
 import cn.nukkit.event.server.SuomiCraftPEModeEvent;
+import cn.nukkit.form.element.ElementButtonImageData;
 import cn.nukkit.form.handler.FormResponseHandler;
 import cn.nukkit.form.window.FormWindow;
 import cn.nukkit.form.window.FormWindowCustom;
+import cn.nukkit.form.window.FormWindowSimple;
+import cn.nukkit.scheduler.TaskHandler;
 import cn.nukkit.inventory.*;
 import cn.nukkit.inventory.transaction.*;
 import cn.nukkit.inventory.transaction.action.InventoryAction;
@@ -8056,9 +8059,38 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         packet.formId = id;
         packet.data = window.getJSONData(this.protocol);
         this.formWindows.put(packet.formId, window);
+
+        // Bedrock client image fix: send UpdateAttributesPacket to force URL image loading
+        if (window instanceof FormWindowSimple) {
+            FormWindowSimple simpleForm = (FormWindowSimple) window;
+            boolean hasUrlImages = simpleForm.getButtons().stream()
+                    .anyMatch(b -> b.getImage() != null
+                            && ElementButtonImageData.IMAGE_DATA_TYPE_URL.equals(b.getImage().getType()));
+            if (hasUrlImages) {
+                sendFormImageFixPackets();
+            }
+        }
+
         this.dataPacket(packet);
         this.formOpen = true;
         return id;
+    }
+
+    /**
+     * Sends UpdateAttributesPacket to force the Bedrock client to refresh its UI,
+     * which causes URL images in forms to load correctly.
+     * This is a known Bedrock client quirk where certain packets trigger a UI re-render.
+     */
+    private void sendFormImageFixPackets() {
+        final int[] remaining = {3};
+        TaskHandler handler = this.server.getScheduler().scheduleDelayedRepeatingTask(() -> {
+            if (remaining[0]-- <= 0 || !this.isConnected()) return;
+            UpdateAttributesPacket pkt = new UpdateAttributesPacket();
+            pkt.entityId = this.getId();
+            pkt.entries = new Attribute[]{Attribute.getAttribute(Attribute.EXPERIENCE_LEVEL)};
+            pkt.frame = 0;
+            this.dataPacket(pkt);
+        }, 1, 5);
     }
 
     /**
