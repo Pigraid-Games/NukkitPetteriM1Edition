@@ -4723,6 +4723,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                 EmotePacket cleanEmotePacket = new EmotePacket();
                 cleanEmotePacket.runtimeId = emotePacket.runtimeId;
                 cleanEmotePacket.emoteID = emotePacket.emoteID;
+                cleanEmotePacket.flags = (byte) (EmotePacket.FLAG_SERVER | (server.muteEmoteChat ? EmotePacket.FLAG_MUTE_ANNOUNCEMENT : 0));
                 for (Player player : this.getViewers().values()) {
                     if (player.protocol >= ProtocolInfo.v1_16_0 && (!server.reduceTraffic || this.distanceSquared(player) < 10000)) {
                         player.dataPacket(cleanEmotePacket);
