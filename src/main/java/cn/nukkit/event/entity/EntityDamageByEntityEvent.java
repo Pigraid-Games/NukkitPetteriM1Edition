@@ -18,6 +18,8 @@ public class EntityDamageByEntityEvent extends EntityDamageEvent {
 
     private Enchantment[] enchantments;
 
+    private boolean skipEnchantmentEffects;
+
     public EntityDamageByEntityEvent(Entity damager, Entity entity, DamageCause cause, float damage) {
         this(damager, entity, cause, damage, 0.3f);
     }
@@ -69,5 +71,13 @@ public class EntityDamageByEntityEvent extends EntityDamageEvent {
 
     public void setKnockBack(float knockBack) {
         this.knockBack = knockBack;
+    }
+
+    public boolean isSkipEnchantmentEffects() {
+        return skipEnchantmentEffects;
+    }
+
+    public void setSkipEnchantmentEffects(boolean skipEnchantmentEffects) {
+        this.skipEnchantmentEffects = skipEnchantmentEffects;
     }
 }

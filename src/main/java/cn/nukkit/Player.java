@@ -307,10 +307,10 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
     private double lastBreakTime; // Store last block break time to determine if firstBlockBreak is valid
 
     // Attack cooldown tracking to prevent double-hit exploit
-    private long lastAttackTime = 0;
-    private static final long DEFAULT_ATTACK_COOLDOWN_MS = 500; // 10 ticks at 20 TPS
+    private long lastAttackTimeNs = 0;
+    private static final long DEFAULT_ATTACK_COOLDOWN_NS = 500_000_000L; // 10 ticks at 20 TPS (500ms)
     @Getter @Setter
-    private long attackCooldownMs = DEFAULT_ATTACK_COOLDOWN_MS;
+    private long attackCooldownNs = DEFAULT_ATTACK_COOLDOWN_NS;
     @Getter @Setter
     private double knockbackHorizontalMultiplier = 1.0;
     @Getter @Setter
@@ -1500,7 +1500,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
         this.noDamageTicks = 60;
         this.setAirTicks(400);
-        this.lastAttackTime = 0; // Reset attack cooldown on first spawn
+        this.lastAttackTimeNs = 0; // Reset attack cooldown on first spawn
 
         if (this.hasPermission(Server.BROADCAST_CHANNEL_USERS)) {
             this.server.getPluginManager().subscribeToPermission(Server.BROADCAST_CHANNEL_USERS, this);
@@ -4357,9 +4357,16 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                     this.setSprinting(false);
                                 }
 
+                                // Attacker-side cooldown: enforce vanilla 10-tick attack interval
+                                long now = System.nanoTime();
+                                if (now - this.lastAttackTimeNs < this.attackCooldownNs) {
+                                    return;
+                                }
+                                this.lastAttackTimeNs = now;
+
                                 this.attacksPerTick++;
                                 // Server resource guard: cap attacks per tick to prevent excessive event processing
-                                if (this.attacksPerTick > 20) {
+                                if (this.attacksPerTick > 2) {
                                     return;
                                 }
 
@@ -6772,7 +6779,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         this.deadTicks = 0;
         this.noDamageTicks = 60;
         this.timeSinceRest = 0;
-        this.lastAttackTime = 0; // Reset attack cooldown on respawn
+        this.lastAttackTimeNs = 0; // Reset attack cooldown on respawn
 
         this.removeAllEffects(EntityPotionEffectEvent.Cause.DEATH);
         this.setHealth(this.getMaxHealth());

@@ -600,10 +600,13 @@ public abstract class Entity extends Location implements Metadatable {
 
         if (source instanceof EntityDamageByEntityEvent) {
             // Make fire aspect to set the target in fire before dealing any damage so the target is in fire on death even if killed by the first hit
-            Enchantment[] enchantments = ((EntityDamageByEntityEvent) source).getWeaponEnchantments();
-            if (enchantments != null) {
-                for (Enchantment enchantment : enchantments) {
-                    enchantment.doAttack(((EntityDamageByEntityEvent) source).getDamager(), this);
+            // Skip enchantment effects during immunity partial hits to prevent double Fire Aspect etc.
+            if (!((EntityDamageByEntityEvent) source).isSkipEnchantmentEffects()) {
+                Enchantment[] enchantments = ((EntityDamageByEntityEvent) source).getWeaponEnchantments();
+                if (enchantments != null) {
+                    for (Enchantment enchantment : enchantments) {
+                        enchantment.doAttack(((EntityDamageByEntityEvent) source).getDamager(), this);
+                    }
                 }
             }
 

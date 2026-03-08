@@ -59,9 +59,11 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
 
         float unmodifiedBaseDamage = source.getDamage();
 
+        boolean immunityPartialHit = false;
         if (this.attackTime > 0) {
             if (unmodifiedBaseDamage > this.currentDamage) {
                 source.setDamage(Math.max(0, unmodifiedBaseDamage - this.currentDamage)); // https://minecraft.fandom.com/wiki/Damage#Immunity
+                immunityPartialHit = true;
             } else {
                 return false;
             }
@@ -72,6 +74,11 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
                 this.currentDamage = unmodifiedBaseDamage;
             }
             return false;
+        }
+
+        // Suppress enchantment side effects (Fire Aspect, etc.) during immunity partial hits
+        if (immunityPartialHit && source instanceof EntityDamageByEntityEvent) {
+            ((EntityDamageByEntityEvent) source).setSkipEnchantmentEffects(true);
         }
 
         boolean attacked = super.attack(source);
@@ -86,9 +93,12 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
                     this.setOnFire(this.server.getDifficulty() << 1);
                 }
 
-                double deltaX = this.x - damager.x;
-                double deltaZ = this.z - damager.z;
-                this.knockBack(damager, source.getDamage(), deltaX, deltaZ, ((EntityDamageByEntityEvent) source).getKnockBack());
+                // Suppress knockback during immunity partial hits to prevent KB stacking
+                if (!immunityPartialHit) {
+                    double deltaX = this.x - damager.x;
+                    double deltaZ = this.z - damager.z;
+                    this.knockBack(damager, source.getDamage(), deltaX, deltaZ, ((EntityDamageByEntityEvent) source).getKnockBack());
+                }
             }
 
             EntityEventPacket pk = new EntityEventPacket();
