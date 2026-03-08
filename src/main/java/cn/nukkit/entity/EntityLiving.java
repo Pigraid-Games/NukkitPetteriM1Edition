@@ -61,6 +61,11 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
 
         boolean immunityPartialHit = false;
         if (this.attackTime > 0) {
+            // If previous hit dealt 0 damage (e.g. snowball/egg), block all follow-up attacks
+            // to prevent projectile-to-melee combo exploits
+            if (this.currentDamage <= 0) {
+                return false;
+            }
             if (unmodifiedBaseDamage > this.currentDamage) {
                 source.setDamage(Math.max(0, unmodifiedBaseDamage - this.currentDamage)); // https://minecraft.fandom.com/wiki/Damage#Immunity
                 immunityPartialHit = true;
