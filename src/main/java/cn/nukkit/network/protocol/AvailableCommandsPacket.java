@@ -66,22 +66,29 @@ public class AvailableCommandsPacket extends DataPacket {
         LinkedHashSet<String> enumValuesSet = new LinkedHashSet<>();
         LinkedHashSet<String> postFixesSet = new LinkedHashSet<>();
         LinkedHashSet<CommandEnum> enumsSet = new LinkedHashSet<>();
+        LinkedHashSet<CommandEnum> softEnumsSet = new LinkedHashSet<>();
 
         commands.forEach((name, data) -> {
             CommandData cmdData = data.versions.get(0);
 
             if (cmdData.aliases != null) {
-                enumsSet.add(cmdData.aliases);
-
-                enumValuesSet.addAll(cmdData.aliases.getValues());
+                if (cmdData.aliases.isSoft()) {
+                    softEnumsSet.add(cmdData.aliases);
+                } else {
+                    enumsSet.add(cmdData.aliases);
+                    enumValuesSet.addAll(cmdData.aliases.getValues());
+                }
             }
 
             for (CommandOverload overload : cmdData.overloads.values()) {
                 for (CommandParameter parameter : overload.input.parameters) {
                     if (parameter.enumData != null) {
-                        enumsSet.add(parameter.enumData);
-
-                        enumValuesSet.addAll(parameter.enumData.getValues());
+                        if (parameter.enumData.isSoft()) {
+                            softEnumsSet.add(parameter.enumData);
+                        } else {
+                            enumsSet.add(parameter.enumData);
+                            enumValuesSet.addAll(parameter.enumData.getValues());
+                        }
                     }
 
                     if (parameter.postFix != null) {
@@ -93,6 +100,7 @@ public class AvailableCommandsPacket extends DataPacket {
 
         List<String> enumValues = new ArrayList<>(enumValuesSet);
         List<CommandEnum> enums = new ArrayList<>(enumsSet);
+        List<CommandEnum> softEnumsList = new ArrayList<>(softEnumsSet);
         List<String> postFixes = new ArrayList<>(postFixesSet);
 
         ObjIntConsumer<BinaryStream> indexWriter;
@@ -182,11 +190,19 @@ public class AvailableCommandsPacket extends DataPacket {
                     } else {
                         type |= ARG_FLAG_VALID;
                         if (parameter.enumData != null) {
-                            int i = enums.indexOf(parameter.enumData);
-                            if (i < 0) {
-                                throw new IllegalStateException("Enum '" + parameter.enumData.getName() + "' isn't in enums array");
+                            if (parameter.enumData.isSoft()) {
+                                int i = softEnumsList.indexOf(parameter.enumData);
+                                if (i < 0) {
+                                    throw new IllegalStateException("Soft enum '" + parameter.enumData.getName() + "' isn't in soft enums array");
+                                }
+                                type |= ARG_FLAG_SOFT_ENUM | i;
+                            } else {
+                                int i = enums.indexOf(parameter.enumData);
+                                if (i < 0) {
+                                    throw new IllegalStateException("Enum '" + parameter.enumData.getName() + "' isn't in enums array");
+                                }
+                                type |= ARG_FLAG_ENUM | i;
                             }
-                            type |= ARG_FLAG_ENUM | i;
                         } else {
                             int id = parameter.type.getId();
                             if (protocol >= ProtocolInfo.v1_20_70) {
@@ -806,13 +822,14 @@ public class AvailableCommandsPacket extends DataPacket {
         });
 
         if (protocol > 274) {
-            this.putUnsignedVarInt(softEnums.size());
+            this.putUnsignedVarInt(softEnumsList.size());
 
-            softEnums.forEach((name, values) -> {
-                this.putString(name);
+            for (CommandEnum softEnum : softEnumsList) {
+                this.putString(softEnum.getName());
+                List<String> values = softEnum.getValues();
                 this.putUnsignedVarInt(values.size());
                 values.forEach(this::putString);
-            });
+            }
         }
 
         if (protocol >= 407) {

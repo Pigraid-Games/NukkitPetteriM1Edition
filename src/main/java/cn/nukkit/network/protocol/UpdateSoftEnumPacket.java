@@ -2,12 +2,15 @@ package cn.nukkit.network.protocol;
 
 import lombok.ToString;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @ToString
 public class UpdateSoftEnumPacket extends DataPacket {
 
     public static final byte NETWORK_ID = ProtocolInfo.UPDATE_SOFT_ENUM_PACKET;
 
-    public final String[] values = new String[0];
+    public List<String> values = new ArrayList<>();
     public String name = "";
     public Type type = Type.SET;
 
@@ -26,7 +29,7 @@ public class UpdateSoftEnumPacket extends DataPacket {
     public void encode() {
         this.reset();
         this.putString(name);
-        this.putUnsignedVarInt(values.length);
+        this.putUnsignedVarInt(values.size());
 
         for (String value : values) {
             this.putString(value);
