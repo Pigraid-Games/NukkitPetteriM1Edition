@@ -78,17 +78,8 @@ public class LoginPacket extends DataPacket {
     private void decodeSkinData() {
         int size = this.getLInt();
         if (size > 4194304) {
-            if (Server.getInstance().doNotLimitSkinGeometry) {
-                if (size > 10485760) {
-                    Server.getInstance().getLogger().warning(username + ": 10 MB hard limit! The skin data is too big: " + size);
-                    return; // Get disconnected due to "invalid skin"
-                } else {
-                    Server.getInstance().getLogger().warning(username + ": got large skin data but do-not-limit-skin-geometry is enabled: " + size);
-                }
-            } else {
-                Server.getInstance().getLogger().warning(username + ": skin data is too big: " + size);
-                return; // Get disconnected due to "invalid skin"
-            }
+            Server.getInstance().getLogger().warning(username + ": skin data is too big: " + size);
+            return; // Get disconnected due to "invalid skin"
         }
 
         JsonObject skinToken = ClientChainData.decodeToken(new String(this.get(size), StandardCharsets.UTF_8));
@@ -106,7 +97,6 @@ public class LoginPacket extends DataPacket {
         }
 
         skin = new Skin();
-        skin.setTrusted(true); // Trust all player skins
 
         if (skinToken.has("SkinId")) {
             skin.setSkinId(skinToken.get("SkinId").getAsString());

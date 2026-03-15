@@ -23,6 +23,6 @@ public class EnchantmentBowKnockback extends EnchantmentBow {
 
     @Override
     public int getMinEnchantAbility(int level) {
-        return this.getMinEnchantAbility(level) + 25;
+        return 12 + (level - 1) * 20;
     }
 }

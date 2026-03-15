@@ -150,14 +150,7 @@ public final class ClientChainData implements LoginChainData {
     private void decodeSkinData() {
         int size = bs.getLInt();
         if (size > 4194304) {
-            if (Server.getInstance().doNotLimitSkinGeometry) {
-                Server.getInstance().getLogger().warning(username + ": got large skin data but do-not-limit-skin-geometry is enabled: " + size);
-                if (size > 10485760) {
-                    throw new TooBigSkinException("10 MB hard limit! The skin data is too big: " + size);
-                }
-            } else {
-                throw new TooBigSkinException("The skin data is too big: " + size);
-            }
+            throw new TooBigSkinException("The skin data is too big: " + size);
         }
 
         JsonObject skinToken = decodeToken(new String(bs.get(size), StandardCharsets.UTF_8));

@@ -62,7 +62,7 @@ public abstract class EntityProjectile extends Entity {
     protected int collidedTick;
     public boolean hadCollision = false;
     public int piercing;
-    private final Set<Long> piercedEntities = new HashSet<>();
+    protected final Set<Long> piercedEntities = new HashSet<>();
 
     public EntityProjectile(FullChunk chunk, CompoundTag nbt) {
         this(chunk, nbt, null);

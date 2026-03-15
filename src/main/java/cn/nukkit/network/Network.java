@@ -47,9 +47,7 @@ public class Network {
         this.registerPackets();
         this.server = server;
 
-        if (server.doNotLimitSkinGeometry) {
-            this.maxPacketDecompressedSize = 6291456;
-        }
+
     }
 
     @Deprecated
@@ -236,6 +234,8 @@ public class Network {
         this.registerPacket(ProtocolInfo.EMOTE_PACKET, EmotePacket.class);
         this.registerPacket(ProtocolInfo.REQUEST_NETWORK_SETTINGS_PACKET, RequestNetworkSettingsPacket.class);
         this.registerPacket(ProtocolInfo.CLIENT_TO_SERVER_HANDSHAKE_PACKET, ClientToServerHandshakePacket.class);
+        this.registerPacket(ProtocolInfo.CLIENT_CACHE_STATUS_PACKET, ClientCacheStatusPacket.class);
+        this.registerPacket(ProtocolInfo.__INTERNAL__SERVERBOUND_LOADING_SCREEN_PACKET, ServerboundLoadingScreenPacket.class);
         this.registerPacket(ProtocolInfo.REQUEST_PERMISSIONS_PACKET, RequestPermissionsPacket.class);
         this.registerPacket(ProtocolInfo.SET_DEFAULT_GAME_TYPE_PACKET, SetDefaultGameTypePacket.class);
         this.registerPacket(ProtocolInfo.SETTINGS_COMMAND_PACKET, SettingsCommandPacket.class);

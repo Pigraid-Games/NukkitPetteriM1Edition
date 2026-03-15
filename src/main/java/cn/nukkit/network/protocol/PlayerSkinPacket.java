@@ -1,5 +1,6 @@
 package cn.nukkit.network.protocol;
 
+import cn.nukkit.Server;
 import cn.nukkit.entity.data.Skin;
 import lombok.ToString;
 
@@ -38,7 +39,10 @@ public class PlayerSkinPacket extends DataPacket {
             if (!feof()) {
                 getBoolean(); // skin.setTrusted(getBoolean());
             }
-            skin.setTrusted(true); // Trust all player skins
+            if (!skin.isValid()) {
+                Server.getInstance().getLogger().warning("PlayerSkinPacket with invalid skin received");
+                return;
+            }
         }
     }
 

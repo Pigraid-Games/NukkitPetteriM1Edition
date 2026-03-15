@@ -26,8 +26,6 @@ public class Skin {
     public static final int SKIN_128_64_SIZE = 32768;
     public static final int SKIN_128_128_SIZE = 65536;
 
-    private static final int MAX_DATA_SIZE = 262144;
-
     private static final Gson GSON = new Gson();
 
     public static final String GEOMETRY_CUSTOM = convertLegacyGeometryName("geometry.humanoid.custom");
@@ -209,11 +207,15 @@ public class Skin {
     }
 
     public boolean isValid() {
-        return isValid(true);
+        return isValidSkin() && isValidResourcePatch();
     }
 
+    /**
+     * @deprecated The noLimit parameter is ignored. Use {@link #isValid()} instead.
+     */
+    @Deprecated
     public boolean isValid(boolean noLimit) {
-        return isValidSkin(noLimit) && isValidResourcePatch();
+        return isValid();
     }
 
     private boolean isValidResourcePatch() {
@@ -231,22 +233,21 @@ public class Skin {
         }
     }
 
-    private boolean isValidSkin(boolean noLimit) {
+    private boolean isValidSkin() {
         try {
             return (skinId != null && !skinId.trim().isEmpty() && skinId.length() < 100) &&
                     (skinData != null && skinData.width >= 64 && skinData.height >= 32 && skinData.data.length >= SINGLE_SKIN_SIZE) &&
                     (geometryData != null && !geometryData.isEmpty()) &&
-                    (noLimit ||
-                            (geometryData.getBytes(StandardCharsets.UTF_8).length <= MAX_DATA_SIZE &&
-                                    skinData.data.length <= MAX_DATA_SIZE &&
-                                    (capeData == null || capeData.data.length <= MAX_DATA_SIZE) &&
-                                    (animationData == null || animationData.getBytes(StandardCharsets.UTF_8).length <= MAX_DATA_SIZE))) &&
                     (playFabId == null || playFabId.length() < 100) &&
                     (capeId == null || capeId.length() < 100) &&
                     (skinColor == null || skinColor.length() < 100) &&
                     (armSize == null || armSize.length() < 100) &&
                     (fullSkinId == null || fullSkinId.length() < 200) &&
-                    (geometryDataEngineVersion == null || geometryDataEngineVersion.length() < 100);
+                    (geometryDataEngineVersion == null || geometryDataEngineVersion.length() < 100) &&
+                    (animationData == null || animationData.length() < 1000) &&
+                    animations.size() <= 100 &&
+                    personaPieces.size() <= 100 &&
+                    tintColors.size() <= 100;
         } catch (Exception ex) {
             if (Nukkit.DEBUG > 1) Server.getInstance().getLogger().logException(ex);
             return false;

@@ -13,12 +13,17 @@ public class EnchantmentBowInfinity extends EnchantmentBow {
     }
 
     @Override
-    public int getMaxEnchantAbility(int level) {
-        return 50;
+    protected boolean checkCompatibility(Enchantment enchantment) {
+        return super.checkCompatibility(enchantment) && enchantment.id != Enchantment.ID_MENDING;
     }
 
     @Override
     public int getMinEnchantAbility(int level) {
         return 20;
+    }
+
+    @Override
+    public int getMaxEnchantAbility(int level) {
+        return 50;
     }
 }

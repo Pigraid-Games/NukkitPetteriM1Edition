@@ -55,7 +55,6 @@ import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.nbt.tag.DoubleTag;
 import cn.nukkit.nbt.tag.FloatTag;
 import cn.nukkit.nbt.tag.ListTag;
-import cn.nukkit.network.BatchingHelper;
 import cn.nukkit.network.Network;
 import cn.nukkit.network.RakNetInterface;
 import cn.nukkit.network.SourceInterface;
@@ -209,7 +208,7 @@ public class Server {
     private DB nameLookup;
     private PlayerDataSerializer playerDataSerializer;
     private TaskHandler spawnerTask;
-    private final BatchingHelper batchingHelper;
+
     /**
      * Worlds where automatic mob spawning is disabled.
      */
@@ -546,7 +545,6 @@ public class Server {
 
         this.console.setExecutingCommands(true); // Scheduler needs to be ready
 
-        this.batchingHelper = new BatchingHelper();
 
         if (this.getPropertyBoolean("enable-rcon", false)) {
             try {
@@ -945,7 +943,25 @@ public class Server {
     }
 
     public void batchPackets(Player[] players, DataPacket[] packets) {
-        this.batchingHelper.batchPackets(this, players, packets);
+        if (players == null || packets == null || players.length == 0 || packets.length == 0) {
+            return;
+        }
+
+        if (this.callBatchPkEvent) {
+            cn.nukkit.event.server.BatchPacketsEvent ev = new cn.nukkit.event.server.BatchPacketsEvent(players, packets, true);
+            this.getPluginManager().callEvent(ev);
+            if (ev.isCancelled()) {
+                return;
+            }
+        }
+
+        // Dispatch directly to each player session — the pipeline handles batching
+        for (DataPacket packet : packets) {
+            for (Player player : players) {
+                packet.protocol = player.protocol;
+                player.getNetworkSession().sendPacket(packet);
+            }
+        }
     }
 
     public int broadcast(String message, String permissions) {
@@ -1317,8 +1333,6 @@ public class Server {
             this.getLogger().debug("Closing console...");
             this.consoleThread.interrupt();
 
-            this.getLogger().debug("Closing BatchingHelper...");
-            this.batchingHelper.shutdown();
 
             this.getLogger().debug("Stopping network interfaces...");
             for (SourceInterface interfaz : this.network.getInterfaces()) {

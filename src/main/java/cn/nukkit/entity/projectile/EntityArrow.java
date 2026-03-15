@@ -14,7 +14,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * @author MagicDroidX
  * Nukkit Project
  */
-public class EntityArrow extends EntityProjectile {
+public class EntityArrow extends SlenderProjectile {
 
     public static final int NETWORK_ID = 80;
 
@@ -47,9 +47,7 @@ public class EntityArrow extends EntityProjectile {
     }
 
     /**
-     * Get arrow data.
-     *
-     * @return arrow data
+     * Get arrow data (used for tipped arrow variant).
      */
     public int getData() {
         return this.arrowData;
@@ -62,11 +60,6 @@ public class EntityArrow extends EntityProjectile {
 
     @Override
     public float getGravity() {
-        return 0.05f;
-    }
-
-    @Override
-    public float getHeight() {
         return 0.05f;
     }
 
@@ -93,15 +86,10 @@ public class EntityArrow extends EntityProjectile {
         }
 
         if (this.isFromCrossbow) {
-            base += 2; // magic value
+            base += 2;
         }
 
         return base;
-    }
-
-    @Override
-    public float getWidth() {
-        return 0.05f;
     }
 
     @Override
@@ -124,8 +112,6 @@ public class EntityArrow extends EntityProjectile {
 
     /**
      * Get whether the arrow was shot from a crossbow.
-     *
-     * @return arrow is from crossbow
      */
     public boolean isFromCrossbow() {
         return this.isFromCrossbow;
@@ -139,7 +125,6 @@ public class EntityArrow extends EntityProjectile {
     @Override
     public void onHitGround(Vector3 moveVector) {
         super.onHitGround(moveVector);
-
         this.setCritical(false);
     }
 
@@ -182,11 +167,9 @@ public class EntityArrow extends EntityProjectile {
     }
 
     /**
-     * Set arrow data.
+     * Set arrow tipped variant data.
      * Used internally for tipped arrows.
      * Notice: The data is not updated to players unless you call sendData().
-     *
-     * @param data arrow data
      */
     public void setData(int data) {
         if (data < 0) throw new IllegalArgumentException("data < 0");

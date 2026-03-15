@@ -315,7 +315,7 @@ public class EntityHuman extends EntityHumanType {
         if (this != player && !this.hasSpawned.containsKey(player.getLoaderId())) {
             this.hasSpawned.put(player.getLoaderId(), player);
 
-            if (!this.getSkin().isValid(this.server.doNotLimitSkinGeometry)) {
+            if (!this.getSkin().isValid()) {
                 throw new IllegalStateException(this.getClass().getSimpleName() + " must have a valid skin set");
             }
 
