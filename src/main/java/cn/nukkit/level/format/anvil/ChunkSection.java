@@ -444,8 +444,10 @@ public class ChunkSection implements cn.nukkit.level.format.ChunkSection {
 
     @Override
     public void writeTo(int protocol, BinaryStream stream, boolean obfuscated) {
+        BlockStorage snapshot;
         synchronized (storage) {
-            this.storage.writeTo(protocol, this.y, stream, obfuscated);
+            snapshot = storage.copyForChunkSending();
         }
+        snapshot.writeTo(protocol, this.y, stream, obfuscated);
     }
 }

@@ -209,6 +209,47 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
     protected int viewDistance;
     public final Map<Long, Boolean> usedChunks = new Long2ObjectOpenHashMap<>();
     protected final LongLinkedOpenHashSet loadQueue = new LongLinkedOpenHashSet();
+    private final LongComparator chunkFovComparator = new LongComparator() {
+        @Override
+        public int compare(long hash1, long hash2) {
+            int myChunkX = getChunkX();
+            int myChunkZ = getChunkZ();
+
+            int cx1 = Level.getHashX(hash1);
+            int cz1 = Level.getHashZ(hash1);
+            int cx2 = Level.getHashX(hash2);
+            int cz2 = Level.getHashZ(hash2);
+
+            int dx1 = cx1 - myChunkX;
+            int dz1 = cz1 - myChunkZ;
+            int dx2 = cx2 - myChunkX;
+            int dz2 = cz2 - myChunkZ;
+
+            boolean fov1 = isChunkInFov(dx1, dz1);
+            boolean fov2 = isChunkInFov(dx2, dz2);
+
+            if (fov1 && !fov2) return -1;
+            if (!fov1 && fov2) return 1;
+
+            double dist1 = dx1 * (double) dx1 + dz1 * (double) dz1;
+            double dist2 = dx2 * (double) dx2 + dz2 * (double) dz2;
+            return Double.compare(dist1, dist2);
+        }
+
+        private boolean isChunkInFov(int dx, int dz) {
+            double lenSq = dx * (double) dx + dz * (double) dz;
+            if (lenSq < 16.0) return true; // Always in FOV if very close (< 4 chunks)
+
+            double yaw = getYaw();
+            double dirX = -Math.sin(Math.toRadians(yaw));
+            double dirZ = Math.cos(Math.toRadians(yaw));
+
+            double len = Math.sqrt(lenSq);
+            double dot = (dx / len) * dirX + (dz / len) * dirZ;
+            // cos(90 degrees / 2) = cos(45°) ≈ 0.707 for 90-degree FOV
+            return dot >= 0.5; // ~120-degree effective FOV (cos 60° = 0.5)
+        }
+    };
 
     protected final Map<UUID, Player> hiddenPlayers = new HashMap<>();
 
@@ -2435,7 +2476,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                 }
 
                 Skin skin = loginPacket.skin;
-                if (!skin.isValid(this.server.doNotLimitSkinGeometry)) {
+                if (!skin.isValid()) {
                     this.close("", "disconnectionScreen.invalidSkin");
                     return;
                 }
@@ -2574,7 +2615,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                     return;
                 }
 
-                if (!skin.isValid(this.server.doNotLimitSkinGeometry)) {
+                if (!skin.isValid()) {
                     this.close("", "disconnectionScreen.invalidSkin");
                     return;
                 }
@@ -5997,70 +6038,38 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
         this.nextChunkOrderRun = 20;
 
-        loadQueue.clear();
-        Long2ObjectOpenHashMap<Boolean> lastChunk = new Long2ObjectOpenHashMap<>(this.usedChunks);
-
         int centerX = this.getChunkX();
         int centerZ = this.getChunkZ();
-
         int radius = spawned ? this.chunkRadius : server.spawnThresholdRadius;
         int radiusSqr = radius * radius;
 
-        long index;
-        for (int x = 0; x <= radius; x++) {
-            int xx = x * x;
-            for (int z = 0; z <= x; z++) {
-                int distanceSqr = xx + z * z;
-                if (distanceSqr > radiusSqr) continue;
+        // Collect chunks out of range for unloading
+        Long2ObjectOpenHashMap<Boolean> lastChunk = new Long2ObjectOpenHashMap<>(this.usedChunks);
 
-                /* Top right quadrant */
-                if (this.usedChunks.get(index = Level.chunkHash(centerX + x, centerZ + z)) != Boolean.TRUE) {
-                    this.loadQueue.add(index);
-                }
+        // Use a FOV-aware priority queue to sort candidate chunks
+        LongArrayPriorityQueue fovQueue = new LongArrayPriorityQueue(chunkFovComparator);
+
+        for (int rx = -radius; rx <= radius; rx++) {
+            for (int rz = -radius; rz <= radius; rz++) {
+                if (rx * rx + rz * rz > radiusSqr) continue;
+                long index = Level.chunkHash(centerX + rx, centerZ + rz);
                 lastChunk.remove(index);
-                /* Top left quadrant */
-                if (this.usedChunks.get(index = Level.chunkHash(centerX - x - 1, centerZ + z)) != Boolean.TRUE) {
-                    this.loadQueue.add(index);
-                }
-                lastChunk.remove(index);
-                /* Bottom right quadrant */
-                if (this.usedChunks.get(index = Level.chunkHash(centerX + x, centerZ - z - 1)) != Boolean.TRUE) {
-                    this.loadQueue.add(index);
-                }
-                lastChunk.remove(index);
-                /* Bottom left quadrant */
-                if (this.usedChunks.get(index = Level.chunkHash(centerX - x - 1, centerZ - z - 1)) != Boolean.TRUE) {
-                    this.loadQueue.add(index);
-                }
-                lastChunk.remove(index);
-                if (x != z) {
-                    /* Top right quadrant mirror */
-                    if (this.usedChunks.get(index = Level.chunkHash(centerX + z, centerZ + x)) != Boolean.TRUE) {
-                        this.loadQueue.add(index);
-                    }
-                    lastChunk.remove(index);
-                    /* Top left quadrant mirror */
-                    if (this.usedChunks.get(index = Level.chunkHash(centerX - z - 1, centerZ + x)) != Boolean.TRUE) {
-                        this.loadQueue.add(index);
-                    }
-                    lastChunk.remove(index);
-                    /* Bottom right quadrant mirror */
-                    if (this.usedChunks.get(index = Level.chunkHash(centerX + z, centerZ - x - 1)) != Boolean.TRUE) {
-                        this.loadQueue.add(index);
-                    }
-                    lastChunk.remove(index);
-                    /* Bottom left quadrant mirror */
-                    if (this.usedChunks.get(index = Level.chunkHash(centerX - z - 1, centerZ - x - 1)) != Boolean.TRUE) {
-                        this.loadQueue.add(index);
-                    }
-                    lastChunk.remove(index);
+                if (this.usedChunks.get(index) != Boolean.TRUE) {
+                    fovQueue.enqueue(index);
                 }
             }
         }
 
+        // Drain FOV-sorted queue into loadQueue
+        loadQueue.clear();
+        while (!fovQueue.isEmpty()) {
+            loadQueue.add(fovQueue.dequeueLong());
+        }
+
+        // Unload chunks that are now out of range
         LongIterator keys = lastChunk.keySet().iterator();
         while (keys.hasNext()) {
-            index = keys.nextLong();
+            long index = keys.nextLong();
             this.unloadChunk(Level.getHashX(index), Level.getHashZ(index));
         }
 

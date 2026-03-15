@@ -326,6 +326,8 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
     private final boolean antiXray;
 
     private final AsyncChunkThread asyncChunkThread;
+    private final java.util.concurrent.ConcurrentLinkedQueue<AsyncChunkData> pendingCallbacks = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private Thread chunkSubTickThread;
 
     private GeneratorTaskFactory generatorTaskFactory = this;
 
@@ -387,7 +389,24 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
         this.randomTickingEnabled = !Server.noTickingWorlds.contains(name);
         this.antiXray = Server.antiXrayWorlds.contains(name);
 
-        this.asyncChunkThread = new AsyncChunkThread(name);
+        this.asyncChunkThread = new AsyncChunkThread(name, server.chunkSerializationThreads);
+
+        this.chunkSubTickThread = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                AsyncChunkData data;
+                while ((data = asyncChunkThread.out.poll()) != null) {
+                    pendingCallbacks.add(data);
+                }
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }, "ChunkSubTickThread-" + name);
+        this.chunkSubTickThread.setDaemon(true);
+        this.chunkSubTickThread.start();
     }
     private final Long2ByteOpenHashMap currentRedstoneUpdate = new Long2ByteOpenHashMap();
     private static final Block[] EMPTY_BLOCKS_ARRAY = new Block[0];
@@ -1172,6 +1191,9 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
     }
 
     public void close() {
+        if (this.chunkSubTickThread != null) {
+            this.chunkSubTickThread.interrupt();
+        }
         if (this.asyncChunkThread != null) {
             this.asyncChunkThread.shutdown();
         }
@@ -1474,8 +1496,9 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
     }
 
     public void doTick(int currentTick) {
+        // Drain callbacks pre-staged by ChunkSubTickThread
         AsyncChunkData data;
-        while ((data = this.asyncChunkThread.out.poll()) != null) {
+        while ((data = this.pendingCallbacks.poll()) != null) {
             this.chunkRequestCallback(data.protocolId, data.timestamp, data.x, data.z, data.count, data.data, data.hash);
         }
 
@@ -1595,6 +1618,11 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
         }
 
         this.processChunkRequest();
+
+        // Second drain: catch any callbacks that completed during this tick
+        while ((data = this.pendingCallbacks.poll()) != null) {
+            this.chunkRequestCallback(data.protocolId, data.timestamp, data.x, data.z, data.count, data.data, data.hash);
+        }
 
         if (this.sleepTicks > 0 && --this.sleepTicks <= 0) {
             this.checkSleep();

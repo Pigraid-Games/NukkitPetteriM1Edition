@@ -13,6 +13,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 class AsyncChunkThread {
@@ -20,14 +21,14 @@ class AsyncChunkThread {
     private final ExecutorService threadedExecutor;
     final Queue<AsyncChunkData> out = new ConcurrentLinkedQueue<>();
 
-    AsyncChunkThread(String levelName) {
+    AsyncChunkThread(String levelName, int threadCount) {
         ThreadFactoryBuilder builder = new ThreadFactoryBuilder();
-        builder.setNameFormat("AsyncChunkThread for " + levelName);
+        builder.setNameFormat("AsyncChunkThread-%d for " + levelName);
         builder.setUncaughtExceptionHandler((thread, ex) -> {
             Server.getInstance().getLogger().error("Exception in " + thread.getName(), ex);
             ExceptionHandler.handleSilently(ex);
         });
-        this.threadedExecutor = Executors.newSingleThreadExecutor(builder.build());
+        this.threadedExecutor = Executors.newFixedThreadPool(threadCount, builder.build());
     }
 
     void queue(IntSet protocols, BaseChunk chunk, long timestamp, int x, int z, boolean antiXray, DimensionData dimensionData) {
@@ -42,5 +43,10 @@ class AsyncChunkThread {
 
     void shutdown() {
         this.threadedExecutor.shutdownNow();
+        try {
+            this.threadedExecutor.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
