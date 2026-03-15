@@ -44,6 +44,37 @@ public class BlockEntitySign extends BlockEntitySpawnable {
                 .putInt("z", (int) this.z);
     }
 
+    @Override
+    public CompoundTag getSpawnCompound(int protocol) {
+        if (protocol < ProtocolInfo.v1_19_80) {
+            return getSpawnCompound();
+        }
+        // 1.19.80+ expects FrontText/BackText compound structure.
+        String rawText = this.namedTag.getString("Text");
+        CompoundTag frontText = new CompoundTag()
+                .putString("Text", rawText)
+                .putInt("SignTextColor", this.getColor().getARGB())
+                .putBoolean("IgnoreLighting", this.isGlowing())
+                .putBoolean("HideGlowOutline", false)
+                .putBoolean("PersistFormatting", true)
+                .putBoolean("TextIgnoreLegacyBugResolved", true);
+        CompoundTag backText = new CompoundTag()
+                .putString("Text", "")
+                .putInt("SignTextColor", -16777216)
+                .putBoolean("IgnoreLighting", false)
+                .putBoolean("HideGlowOutline", false)
+                .putBoolean("PersistFormatting", true)
+                .putBoolean("TextIgnoreLegacyBugResolved", true);
+        return new CompoundTag()
+                .putString("id", BlockEntity.SIGN)
+                .putCompound("FrontText", frontText)
+                .putCompound("BackText", backText)
+                .putBoolean("IsWaxed", false)
+                .putInt("x", (int) this.x)
+                .putInt("y", (int) this.y)
+                .putInt("z", (int) this.z);
+    }
+
     public String[] getText() {
         return text;
     }
@@ -125,6 +156,13 @@ public class BlockEntitySign extends BlockEntitySpawnable {
     public void setGlowing(boolean glowing) {
         this.namedTag.putBoolean("IgnoreLighting", glowing);
         setDirty();
+    }
+
+    @Override
+    public void spawnTo(Player player) {
+        if (!this.closed) {
+            player.dataPacket(this.createSpawnPacket(player.protocol));
+        }
     }
 
     public boolean setText(String... lines) {

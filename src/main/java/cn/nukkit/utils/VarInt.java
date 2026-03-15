@@ -144,6 +144,11 @@ public final class VarInt {
     }
 
     private static void write(BinaryStream stream, long value) {
+        // Fast path: most values (packet IDs, small counts) fit in one byte
+        if ((value & ~0x7FL) == 0) {
+            stream.putByte((byte) value);
+            return;
+        }
         do {
             byte temp = (byte) (value & 0b01111111);
             // Note: >>> means that the sign bit is shifted with the rest of the number rather than being left alone

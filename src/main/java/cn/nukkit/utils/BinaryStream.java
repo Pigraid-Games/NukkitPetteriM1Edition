@@ -102,7 +102,7 @@ public class BinaryStream {
     }
 
     public boolean feof() {
-        return this.offset < 0 || this.offset >= this.buffer.length;
+        return this.offset < 0 || this.offset >= this.count;
     }
 
     public byte[] get() {
@@ -839,7 +839,8 @@ public class BinaryStream {
     }
 
     public void putByte(byte b) {
-        this.put(new byte[]{b});
+        ensureCapacity(this.count + 1);
+        this.buffer[this.count++] = b;
     }
 
     public void putByteArray(byte[] b) {
@@ -889,7 +890,7 @@ public class BinaryStream {
     }
 
     public void putFloat(float v) {
-        this.put(Binary.writeFloat(v));
+        putInt(Float.floatToRawIntBits(v));
     }
 
     public void putGameRules(GameRules gameRules, boolean startGame) {
@@ -937,31 +938,66 @@ public class BinaryStream {
     }
 
     public void putInt(int i) {
-        this.put(Binary.writeInt(i));
+        ensureCapacity(this.count + 4);
+        buffer[count]     = (byte) (i >>> 24);
+        buffer[count + 1] = (byte) (i >>> 16);
+        buffer[count + 2] = (byte) (i >>> 8);
+        buffer[count + 3] = (byte) (i);
+        count += 4;
     }
 
     public void putLFloat(float v) {
-        this.put(Binary.writeLFloat(v));
+        putLInt(Float.floatToRawIntBits(v));
     }
 
     public void putLInt(int i) {
-        this.put(Binary.writeLInt(i));
+        ensureCapacity(this.count + 4);
+        buffer[count]     = (byte) (i);
+        buffer[count + 1] = (byte) (i >>> 8);
+        buffer[count + 2] = (byte) (i >>> 16);
+        buffer[count + 3] = (byte) (i >>> 24);
+        count += 4;
     }
 
     public void putLLong(long l) {
-        this.put(Binary.writeLLong(l));
+        ensureCapacity(this.count + 8);
+        buffer[count]     = (byte) (l);
+        buffer[count + 1] = (byte) (l >>> 8);
+        buffer[count + 2] = (byte) (l >>> 16);
+        buffer[count + 3] = (byte) (l >>> 24);
+        buffer[count + 4] = (byte) (l >>> 32);
+        buffer[count + 5] = (byte) (l >>> 40);
+        buffer[count + 6] = (byte) (l >>> 48);
+        buffer[count + 7] = (byte) (l >>> 56);
+        count += 8;
     }
 
     public void putLShort(int s) {
-        this.put(Binary.writeLShort(s));
+        ensureCapacity(this.count + 2);
+        buffer[count]     = (byte) (s);
+        buffer[count + 1] = (byte) (s >>> 8);
+        count += 2;
     }
 
     public void putLTriad(int triad) {
-        this.put(Binary.writeLTriad(triad));
+        ensureCapacity(this.count + 3);
+        buffer[count]     = (byte) (triad);
+        buffer[count + 1] = (byte) (triad >>> 8);
+        buffer[count + 2] = (byte) (triad >>> 16);
+        count += 3;
     }
 
     public void putLong(long l) {
-        this.put(Binary.writeLong(l));
+        ensureCapacity(this.count + 8);
+        buffer[count]     = (byte) (l >>> 56);
+        buffer[count + 1] = (byte) (l >>> 48);
+        buffer[count + 2] = (byte) (l >>> 40);
+        buffer[count + 3] = (byte) (l >>> 32);
+        buffer[count + 4] = (byte) (l >>> 24);
+        buffer[count + 5] = (byte) (l >>> 16);
+        buffer[count + 6] = (byte) (l >>> 8);
+        buffer[count + 7] = (byte) (l);
+        count += 8;
     }
 
     public <T> void putNbtTag(T tag) {
@@ -1025,7 +1061,10 @@ public class BinaryStream {
     }
 
     public void putShort(int s) {
-        this.put(Binary.writeShort(s));
+        ensureCapacity(this.count + 2);
+        buffer[count]     = (byte) (s >>> 8);
+        buffer[count + 1] = (byte) (s);
+        count += 2;
     }
 
     public void putSignedBlockPosition(BlockVector3 v) {
