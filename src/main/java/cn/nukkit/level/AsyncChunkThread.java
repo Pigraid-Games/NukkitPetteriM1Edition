@@ -10,13 +10,17 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import it.unimi.dsi.fastutil.ints.IntSet;
 
 import java.util.Queue;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 class AsyncChunkThread {
+
+    /** Maximum pending serialization tasks before CallerRunsPolicy kicks in. */
+    private static final int MAX_PENDING = 256;
 
     private final ExecutorService threadedExecutor;
     final Queue<AsyncChunkData> out = new ConcurrentLinkedQueue<>();
@@ -28,7 +32,13 @@ class AsyncChunkThread {
             Server.getInstance().getLogger().error("Exception in " + thread.getName(), ex);
             ExceptionHandler.handleSilently(ex);
         });
-        this.threadedExecutor = Executors.newFixedThreadPool(threadCount, builder.build());
+        this.threadedExecutor = new ThreadPoolExecutor(
+                threadCount, threadCount,
+                60L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(MAX_PENDING),
+                builder.build(),
+                new ThreadPoolExecutor.CallerRunsPolicy()
+        );
     }
 
     void queue(IntSet protocols, BaseChunk chunk, long timestamp, int x, int z, boolean antiXray, DimensionData dimensionData) {

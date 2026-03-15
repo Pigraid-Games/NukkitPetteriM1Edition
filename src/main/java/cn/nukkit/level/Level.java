@@ -3,6 +3,7 @@ package cn.nukkit.level;
 import cn.nukkit.Nukkit;
 import cn.nukkit.Player;
 import cn.nukkit.Server;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import cn.nukkit.block.*;
 import cn.nukkit.block.custom.CustomBlockManager;
 import cn.nukkit.blockentity.BlockEntity;
@@ -213,6 +214,11 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
 
     private final ConcurrentLinkedQueue<BlockEntity> updateBlockEntities = new ConcurrentLinkedQueue<>();
 
+    /** Executor for off-main-thread LevelDB chunk reads. */
+    private ExecutorService chunkLoadExecutor;
+    /** Deduplicates concurrent async loads for the same chunk position. */
+    private final ConcurrentHashMap<Long, CompletableFuture<BaseFullChunk>> chunkLoadFutures = new ConcurrentHashMap<>();
+
     private final Server server;
 
     private final int levelId;
@@ -391,6 +397,18 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
 
         this.asyncChunkThread = new AsyncChunkThread(name, server.chunkSerializationThreads);
 
+        int ioThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
+        ThreadFactoryBuilder chunkIoBuilder = new ThreadFactoryBuilder()
+                .setNameFormat("ChunkIO-" + name + "-%d")
+                .setDaemon(true);
+        this.chunkLoadExecutor = new ThreadPoolExecutor(
+                ioThreads, ioThreads,
+                60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(64),
+                chunkIoBuilder.build(),
+                new ThreadPoolExecutor.CallerRunsPolicy()
+        );
+
         this.chunkSubTickThread = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 AsyncChunkData data;
@@ -492,7 +510,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
 
         if (server.reduceTraffic && server.suomiCraftPEMode()) {
             // Don't broadcast to full view distance
-            Collection<Player> chunkViewers = this.getChunkPlayers(pos.getChunkX(), pos.getChunkZ()).values();
+            Collection<Player> chunkViewers = this.getChunkPlayersRaw(pos.getChunkX(), pos.getChunkZ()).values();
             for (Player player : chunkViewers) {
                 if (pos.distanceSquared(player) < 1024) {
                     player.dataPacket(pk);
@@ -533,7 +551,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
             pk.isGlobal = false;
             pk.isBabyMob = false;
 
-            Collection<Player> chunkViewers = this.getChunkPlayers(pos.getChunkX(), pos.getChunkZ()).values();
+            Collection<Player> chunkViewers = this.getChunkPlayersRaw(pos.getChunkX(), pos.getChunkZ()).values();
             for (Player player : chunkViewers) {
                 if (pos.distanceSquared(player) < 1024) {
                     player.dataPacket(pk);
@@ -572,7 +590,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
 
         if (allowDistanceOptimization && server.reduceTraffic) {
             // Don't broadcast to full view distance
-            Collection<Player> chunkViewers = this.getChunkPlayers(pos.getChunkX(), pos.getChunkZ()).values();
+            Collection<Player> chunkViewers = this.getChunkPlayersRaw(pos.getChunkX(), pos.getChunkZ()).values();
             for (Player player : chunkViewers) {
                 if (pos.distanceSquared(player) < 1024) {
                     player.dataPacket(pk);
@@ -604,7 +622,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
     public void addParticle(Particle particle, Player[] players, int count) {
         Int2ObjectMap<ObjectList<Player>> targets;
         if (players == null) {
-            targets = Server.sortPlayers(this.getChunkPlayers(particle.getChunkX(), particle.getChunkZ()).values());
+            targets = Server.sortPlayers(this.getChunkPlayersRaw(particle.getChunkX(), particle.getChunkZ()).values());
         } else {
             targets = Server.sortPlayers(players);
         }
@@ -717,7 +735,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
                 packet.z = pos.getFloorZ();
             }
 
-            Collection<Player> chunkViewers = this.getChunkPlayers(packet.x >> 4, packet.z >> 4).values();
+            Collection<Player> chunkViewers = this.getChunkPlayersRaw(packet.x >> 4, packet.z >> 4).values();
             for (Player player : chunkViewers) {
                 if (pos.distanceSquared(player) < 1024) {
                     player.dataPacket(packet);
@@ -936,7 +954,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
                 }
 
                 if (target == null) {
-                    Int2ObjectMap<ObjectList<Player>> targets = Server.sortPlayers(this.getChunkPlayers(pos.getChunkX(), pos.getChunkZ()).values().toArray(new Player[0]));
+                    Int2ObjectMap<ObjectList<Player>> targets = Server.sortPlayers(this.getChunkPlayersRaw(pos.getChunkX(), pos.getChunkZ()).values().toArray(new Player[0]));
                     for (int protocolId : targets.keySet()) {
                         UpdateBlockPacket packet = new UpdateBlockPacket();
                         packet.x = x;
@@ -1196,6 +1214,9 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
         }
         if (this.asyncChunkThread != null) {
             this.asyncChunkThread.shutdown();
+        }
+        if (this.chunkLoadExecutor != null) {
+            this.chunkLoadExecutor.shutdownNow();
         }
 
         this.saveLevelData();
@@ -1567,13 +1588,10 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
 
 
         if (!this.updateEntities.isEmpty()) {
-            for (long id : new ArrayList<>(this.updateEntities.keySet())) {
+            long[] entityIds = this.updateEntities.keySet().toLongArray();
+            for (long id : entityIds) {
                 Entity entity = this.updateEntities.get(id);
-                if (entity == null) {
-                    this.updateEntities.remove(id);
-                    continue;
-                }
-                if (entity.closed || !entity.onUpdate(currentTick)) {
+                if (entity == null || entity.closed || !entity.onUpdate(currentTick)) {
                     this.updateEntities.remove(id);
                 }
             }
@@ -1598,11 +1616,11 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
                             if (chunk == null) {
                                 continue;
                             }
-                            for (Player p : this.getChunkPlayers(chunkX, chunkZ).values()) {
+                            for (Player p : this.getChunkPlayersRaw(chunkX, chunkZ).values()) {
                                 p.onChunkChanged(chunk);
                             }
                         } else {
-                            Player[] playerArray = this.getChunkPlayers(chunkX, chunkZ).values().toArray(new Player[0]);
+                            Player[] playerArray = this.getChunkPlayersRaw(chunkX, chunkZ).values().toArray(new Player[0]);
                             Vector3[] blocksArray = new Vector3[blocks.size()];
                             int i = 0;
                             for (int blockHash : blocks.keySet()) {
@@ -1632,7 +1650,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
             for (long index : this.chunkPackets.keySet()) {
                 int chunkX = Level.getHashX(index);
                 int chunkZ = Level.getHashZ(index);
-                Map<Integer, Player> map = this.getChunkPlayers(chunkX, chunkZ);
+                Map<Integer, Player> map = this.getChunkPlayersRaw(chunkX, chunkZ);
                 if (!map.isEmpty()) {
                     Player[] chunkPlayers = map.values().toArray(new Player[0]);
                     for (DataPacket pk : this.chunkPackets.get(index)) {
@@ -2090,6 +2108,72 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
         return chunk;
     }
 
+    /**
+     * Loads a chunk asynchronously, performing LevelDB disk I/O off the main thread.
+     * Chunk initialization and events are always dispatched back on the main server thread.
+     * If the chunk is already loaded the returned future completes immediately.
+     * Concurrent requests for the same position are deduplicated — they share one future.
+     */
+    public CompletableFuture<BaseFullChunk> getChunkAsync(int chunkX, int chunkZ, boolean create) {
+        long index = Level.chunkHash(chunkX, chunkZ);
+        BaseFullChunk loaded = this.provider.getLoadedChunk(index);
+        if (loaded != null) {
+            return CompletableFuture.completedFuture(loaded);
+        }
+        return chunkLoadFutures.computeIfAbsent(index, k ->
+                CompletableFuture.supplyAsync(() -> this.provider.getChunk(chunkX, chunkZ, create), chunkLoadExecutor)
+                        .thenCompose(rawChunk -> {
+                            CompletableFuture<BaseFullChunk> mainFuture = new CompletableFuture<>();
+                            this.server.getScheduler().scheduleTask(() -> {
+                                try {
+                                    mainFuture.complete(finalizeChunkLoad(index, chunkX, chunkZ, rawChunk, create));
+                                } catch (Throwable t) {
+                                    mainFuture.completeExceptionally(t);
+                                } finally {
+                                    chunkLoadFutures.remove(index);
+                                }
+                            });
+                            return mainFuture;
+                        })
+        );
+    }
+
+    public CompletableFuture<BaseFullChunk> getChunkAsync(int chunkX, int chunkZ) {
+        return getChunkAsync(chunkX, chunkZ, false);
+    }
+
+    private synchronized BaseFullChunk finalizeChunkLoad(long index, int x, int z, BaseFullChunk chunk, boolean create) {
+        // Check if another path loaded the chunk while I/O was in flight
+        BaseFullChunk existing = this.provider.getLoadedChunk(index);
+        if (existing != null) {
+            return existing;
+        }
+        if (chunk == null) {
+            if (create) {
+                throw new IllegalStateException("Could not create new chunk");
+            }
+            return null;
+        }
+        if (chunk.getProvider() != null) {
+            this.server.getPluginManager().callEvent(new ChunkLoadEvent(chunk, !chunk.isGenerated()));
+        } else {
+            this.unloadChunk(x, z, false);
+            return chunk;
+        }
+        chunk.initChunk();
+        if (this.isChunkInUse(index)) {
+            this.unloadQueue.remove(index);
+            if (this.useChunkLoaderApi) {
+                for (ChunkLoader loader : this.getChunkLoaders(x, z)) {
+                    loader.onChunkLoaded(chunk);
+                }
+            }
+        } else {
+            this.unloadQueue.put(index, System.currentTimeMillis());
+        }
+        return chunk;
+    }
+
     public Map<Long, BlockEntity> getChunkBlockEntities(int X, int Z) {
         FullChunk chunk;
         return (chunk = this.getChunk(X, Z)) != null ? chunk.getBlockEntities() : Collections.emptyMap();
@@ -2127,6 +2211,12 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
         } else {
             return new HashMap<>();
         }
+    }
+
+    /** Returns the live player map for a chunk without copying — for internal read-only iteration only. */
+    private Map<Integer, Player> getChunkPlayersRaw(int chunkX, int chunkZ) {
+        Map<Integer, Player> map = this.playerLoaders.get(Level.chunkHash(chunkX, chunkZ));
+        return map != null ? map : Collections.emptyMap();
     }
 
     public static int getChunkProtocol(int protocol) { // Remember to update when block palette changes
@@ -3542,7 +3632,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
     }
 
     public void sendBlockExtraData(int x, int y, int z, int id, int data) {
-        this.sendBlockExtraData(x, y, z, id, data, this.getChunkPlayers(x >> 4, z >> 4).values());
+        this.sendBlockExtraData(x, y, z, id, data, this.getChunkPlayersRaw(x >> 4, z >> 4).values());
     }
 
     public void sendBlockExtraData(int x, int y, int z, int id, int data, Collection<Player> players) {
@@ -3807,7 +3897,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
 
         if (send) {
             if (direct) {
-                this.sendBlocks(this.getChunkPlayers(cx, cz).values().toArray(new Player[0]), new Block[]{block}, UpdateBlockPacket.FLAG_ALL_PRIORITY, layer);
+                this.sendBlocks(this.getChunkPlayersRaw(cx, cz).values().toArray(new Player[0]), new Block[]{block}, UpdateBlockPacket.FLAG_ALL_PRIORITY, layer);
             } else {
                 addBlockChange(Level.chunkHash(cx, cz), x, y, z);
             }
@@ -5268,7 +5358,7 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
         }
 
         if (playSound) {
-            Int2ObjectMap<ObjectList<Player>> sortedPlayers = Server.sortPlayers(this.getChunkPlayers(hand.getChunkX(), hand.getChunkZ()).values());
+            Int2ObjectMap<ObjectList<Player>> sortedPlayers = Server.sortPlayers(this.getChunkPlayersRaw(hand.getChunkX(), hand.getChunkZ()).values());
             sortedPlayers.forEach((protocolId, players) -> {
                 int soundData = GlobalBlockPalette.getOrCreateRuntimeId(protocolId > ProtocolInfo.v1_2_10 ? protocolId : ProtocolInfo.CURRENT_PROTOCOL, // no block palette in <= 1.2.10
                         hand.getId(), hand.getDamage());
