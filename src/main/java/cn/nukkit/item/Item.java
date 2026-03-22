@@ -1006,6 +1006,10 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
         return false;
     }
 
+    public boolean isSpear() {
+        return false;
+    }
+
     public boolean isTool() {
         return false;
     }

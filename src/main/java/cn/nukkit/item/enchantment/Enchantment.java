@@ -1,6 +1,7 @@
 package cn.nukkit.item.enchantment;
 
 import cn.nukkit.entity.Entity;
+import cn.nukkit.event.entity.EntityDamageByEntityEvent;
 import cn.nukkit.event.entity.EntityDamageEvent;
 import cn.nukkit.item.Item;
 import cn.nukkit.item.enchantment.bow.EnchantmentBowFlame;
@@ -19,6 +20,7 @@ import cn.nukkit.item.enchantment.loot.EnchantmentLootWeapon;
 import cn.nukkit.item.enchantment.mace.EnchantmentBreach;
 import cn.nukkit.item.enchantment.mace.EnchantmentDensity;
 import cn.nukkit.item.enchantment.mace.EnchantmentWindBurst;
+import cn.nukkit.item.enchantment.spear.EnchantmentLunge;
 import cn.nukkit.item.enchantment.protection.*;
 import cn.nukkit.item.enchantment.trident.EnchantmentTridentChanneling;
 import cn.nukkit.item.enchantment.trident.EnchantmentTridentImpaling;
@@ -78,6 +80,7 @@ public abstract class Enchantment implements Cloneable {
     public static final int ID_DENSITY = 38;
     public static final int ID_BREACH = 39;
     public static final int ID_WIND_BURST = 40;
+    public static final int ID_LUNGE = 41;
     public final int id;
     private final Rarity rarity;
     public EnchantmentType type;
@@ -148,6 +151,10 @@ public abstract class Enchantment implements Cloneable {
 
     }
 
+    public void doAttack(EntityDamageByEntityEvent event) {
+        // no-op default
+    }
+
     public void doPostAttack(Entity attacker, Entity entity) {
 
     }
@@ -169,6 +176,10 @@ public abstract class Enchantment implements Cloneable {
 
     public double getDamageBonus(Entity entity) {
         return 0;
+    }
+
+    public double getDamageBonus(Entity target, Entity damager) {
+        return getDamageBonus(target);
     }
 
     public static Enchantment getEnchantment(int id) {
@@ -284,6 +295,7 @@ public abstract class Enchantment implements Cloneable {
         enchantments[ID_DENSITY] = new EnchantmentDensity();
         enchantments[ID_BREACH] = new EnchantmentBreach();
         enchantments[ID_WIND_BURST] = new EnchantmentWindBurst();
+        enchantments[ID_LUNGE] = new EnchantmentLunge();
     }
 
     public final boolean isCompatibleWith(Enchantment enchantment) {

@@ -4415,7 +4415,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
                                 float itemDamage = item.getAttackDamage();
                                 for (Enchantment enchantment : enchantments) {
-                                    itemDamage += enchantment.getDamageBonus(target);
+                                    itemDamage += enchantment.getDamageBonus(target, this);
                                 }
 
                                 // Mace smash attack
@@ -4435,12 +4435,6 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                             smashDamage = 3 * 4 + 5 * 2 + (blocksFallen - 8);
                                         }
                                         itemDamage += smashDamage;
-
-                                        // Density enchantment bonus: +0.5 damage per block fallen per level
-                                        Enchantment densityEnchant = item.getEnchantment(Enchantment.ID_DENSITY);
-                                        if (densityEnchant != null) {
-                                            itemDamage += densityEnchant.getLevel() * 0.5f * blocksFallen;
-                                        }
                                     }
                                 }
 

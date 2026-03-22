@@ -25,6 +25,7 @@ import cn.nukkit.item.enchantment.Enchantment;
 import cn.nukkit.level.GameRule;
 import cn.nukkit.level.Level;
 import cn.nukkit.level.Location;
+import cn.nukkit.level.ParticleEffect;
 import cn.nukkit.level.Position;
 import cn.nukkit.level.format.FullChunk;
 import cn.nukkit.level.persistence.PersistentDataContainer;
@@ -606,6 +607,7 @@ public abstract class Entity extends Location implements Metadatable {
                 if (enchantments != null) {
                     for (Enchantment enchantment : enchantments) {
                         enchantment.doAttack(((EntityDamageByEntityEvent) source).getDamager(), this);
+                        enchantment.doAttack((EntityDamageByEntityEvent) source);
                     }
                 }
             }
@@ -672,6 +674,7 @@ public abstract class Entity extends Location implements Metadatable {
                 }
                 if (totem) {
                     this.getLevel().addLevelEvent(this, LevelEventPacket.EVENT_SOUND_TOTEM);
+                    this.getLevel().addParticleEffect(this, ParticleEffect.TOTEM);
 
                     this.extinguish();
                     this.removeAllEffects(EntityPotionEffectEvent.Cause.TOTEM);

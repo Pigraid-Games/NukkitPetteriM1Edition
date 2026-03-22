@@ -54,25 +54,26 @@ public abstract class EntityHumanType extends EntityCreature implements Inventor
             //source.setDamage(r, EntityDamageEvent.DamageModifier.ARMOR);
             //source.setDamage(source.getDamage(EntityDamageEvent.DamageModifier.ARMOR_ENCHANTMENTS) - (originalDamage - originalDamage * (1 - epf / 25f)), EntityDamageEvent.DamageModifier.ARMOR_ENCHANTMENTS);
 
-            if (source.canBeReducedByArmor()) {
-                float armorReduction = armorPoints * 0.04f;
-
-                // Breach enchantment: reduce armor effectiveness
-                if (source instanceof EntityDamageByEntityEvent) {
-                    Item weapon = source.getWeapon();
-                    if (weapon != null && weapon.isMace()) {
-                        Enchantment breachEnchant = weapon.getEnchantment(Enchantment.ID_BREACH);
-                        if (breachEnchant != null) {
-                            float bypassFactor = ((EnchantmentBreach) breachEnchant).getArmorBypassFactor();
-                            armorReduction *= (1.0f - Math.min(bypassFactor, 1.0f));
-                        }
+            // Detect Breach enchantment reduction factor once, used for both ARMOR and ARMOR_ENCHANTMENTS
+            float breachReductionFactor = 1.0f;
+            if (source instanceof EntityDamageByEntityEvent) {
+                Item weapon = source.getWeapon();
+                if (weapon != null && weapon.isMace()) {
+                    Enchantment breachEnchant = weapon.getEnchantment(Enchantment.ID_BREACH);
+                    if (breachEnchant != null) {
+                        float bypassFactor = ((EnchantmentBreach) breachEnchant).getArmorBypassFactor();
+                        breachReductionFactor = 1.0f - Math.min(bypassFactor, 1.0f);
                     }
                 }
+            }
 
+            if (source.canBeReducedByArmor()) {
+                float armorReduction = armorPoints * 0.04f * breachReductionFactor;
                 source.setDamage(-source.getFinalDamage() * armorReduction, EntityDamageEvent.DamageModifier.ARMOR);
             }
 
-            source.setDamage(-source.getFinalDamage() * Math.min(NukkitMath.ceilFloat(Math.min(epf, 25) * ((float) ThreadLocalRandom.current().nextInt(50, 100) / 100)), 20) * 0.04f,
+            float enchantReduction = Math.min(NukkitMath.ceilFloat(Math.min(epf, 25) * ((float) ThreadLocalRandom.current().nextInt(50, 100) / 100)), 20) * 0.04f;
+            source.setDamage(-source.getFinalDamage() * enchantReduction * breachReductionFactor,
                     EntityDamageEvent.DamageModifier.ARMOR_ENCHANTMENTS);
 
             //source.setDamage(-Math.min(this.getAbsorption(), source.getFinalDamage()), EntityDamageEvent.DamageModifier.ABSORPTION);

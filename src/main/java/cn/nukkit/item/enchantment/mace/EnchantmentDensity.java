@@ -1,5 +1,6 @@
 package cn.nukkit.item.enchantment.mace;
 
+import cn.nukkit.entity.Entity;
 import cn.nukkit.item.enchantment.Enchantment;
 import cn.nukkit.item.enchantment.EnchantmentType;
 
@@ -30,6 +31,15 @@ public class EnchantmentDensity extends Enchantment {
                 && !(enchantment instanceof cn.nukkit.item.enchantment.damage.EnchantmentDamageSmite)
                 && !(enchantment instanceof cn.nukkit.item.enchantment.damage.EnchantmentDamageArthropods)
                 && super.checkCompatibility(enchantment);
+    }
+
+    @Override
+    public double getDamageBonus(Entity target, Entity damager) {
+        double height = Math.max(damager.fallDistance, damager.highestPosition - damager.y);
+        if (height >= 1.5) {
+            return height * 0.5 * this.level;
+        }
+        return 0;
     }
 
     @Override
