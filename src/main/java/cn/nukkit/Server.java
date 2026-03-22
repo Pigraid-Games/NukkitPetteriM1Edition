@@ -2722,6 +2722,7 @@ public class Server {
         Entity.registerEntity("EvocationFangs", EntityEvocationFangs.class);
         Entity.registerEntity("EnderCharge", EntityEnderCharge.class);
         Entity.registerEntity("WindCharge", EntityWindCharge.class);
+        Entity.registerEntity("BreezeWindCharge", EntityBreezeWindCharge.class);
         Entity.registerEntity("FishingHook", EntityFishingHook.class);
         Entity.registerEntity("EnderEye", EntityEnderEye.class);
         Entity.registerEntity("AreaEffectCloud", EntityAreaEffectCloud.class);

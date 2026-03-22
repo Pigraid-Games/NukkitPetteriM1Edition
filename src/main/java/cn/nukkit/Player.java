@@ -4194,6 +4194,25 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                     }
                                 }
 
+                                // Throwable items (snowball, ender pearl, potion, etc.) should still throw
+                                // when right-clicking while looking at a non-interactable block
+                                Item handItem = inventory.getItemInHand();
+                                if (handItem instanceof ProjectileItem) {
+                                    Vector3 directionVector = this.getDirectionVector();
+                                    int oldCount = handItem.getCount();
+                                    int oldDamage = handItem.getDamage();
+                                    if (handItem.onClickAir(this, directionVector)) {
+                                        if (this.isSurvival() || this.isAdventure()) {
+                                            if (handItem.getId() == 0 || ((handItem.getCount() != oldCount || handItem.getDamage() != oldDamage) && this.inventory.getItemInHandFast().getId() == handItem.getId())) {
+                                                this.inventory.setItemInHand(handItem);
+                                                itemSent = true;
+                                            }
+                                        }
+                                    }
+                                    this.needSendHeldItem = true;
+                                    return;
+                                }
+
                                 this.needSendHeldItem = true;
 
                                 if (blockVector.distanceSquared(this) > 10000) {
@@ -4483,11 +4502,17 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                         }
                                     }
 
-                                    // Wind Burst enchantment: launch attacker upward
+                                    // Wind Burst enchantment: launch attacker upward with forward boost
                                     Enchantment windBurstEnchant = item.getEnchantment(Enchantment.ID_WIND_BURST);
                                     if (windBurstEnchant != null) {
-                                        double launchVelocity = ((EnchantmentWindBurst) windBurstEnchant).getLaunchVelocity();
-                                        this.setMotion(new Vector3(this.motionX, launchVelocity, this.motionZ));
+                                        double launchVelocity = ((EnchantmentWindBurst) windBurstEnchant).getLaunchVelocity(blocksFallen);
+                                        double yawRad = Math.toRadians(this.yaw);
+                                        double forwardBoost = 0.08d + 0.02d * windBurstEnchant.getLevel();
+                                        this.setMotion(new Vector3(
+                                                -Math.sin(yawRad) * forwardBoost,
+                                                launchVelocity,
+                                                Math.cos(yawRad) * forwardBoost
+                                        ));
                                     }
 
                                     // Vanilla mace smash ground dust particle (client resolves block texture from position)
@@ -4870,6 +4895,10 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                     this.getServer().getLogger().debug(username + ": SettingsCommandPacket unsupported command: " + command);
                 }
                 return;
+            case ProtocolInfo.__INTERNAL__SET_PLAYER_INVENTORY_OPTIONS_PACKET:
+                // Client sends this packet to inform the server about inventory UI preferences (tab selection, layout, filtering).
+                // The server does not need to act on this data.
+                return;
         }
     }
 
@@ -5043,6 +5072,19 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                         this.foodData.updateFoodExpLevel(jump + swimming);
                     }
                 }
+            }
+
+            // Spear stab — triggered by sprinting movement
+            Item heldItem = this.inventory.getItemInHand();
+            if (heldItem instanceof ItemSpear && this.isSprinting() && distanceSquared >= 0.01) {
+                ((ItemSpear) heldItem).onSpearStab(this, this.getMovementSpeed());
+            }
+
+            // Spear charge attack — triggered while holding use button (spear is lowered).
+            // No movement requirement on the holder: relative velocity is computed per-target inside,
+            // so an enemy running into a stationary spear is handled correctly.
+            if (heldItem instanceof ItemSpear && this.isUsingItem()) {
+                ((ItemSpear) heldItem).onChargeMovement(this);
             }
 
             Item boots = this.inventory.getBootsFast();

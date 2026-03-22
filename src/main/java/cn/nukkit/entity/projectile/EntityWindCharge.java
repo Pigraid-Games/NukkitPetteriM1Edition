@@ -2,6 +2,9 @@ package cn.nukkit.entity.projectile;
 
 import cn.nukkit.Player;
 import cn.nukkit.block.*;
+import cn.nukkit.block.BlockCandleCake;
+import cn.nukkit.block.BlockChorusFlower;
+import cn.nukkit.block.BlockDecoratedPot;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.EntityExplosive;
 import cn.nukkit.entity.EntityLiving;
@@ -27,10 +30,10 @@ public class EntityWindCharge extends EntityProjectile implements EntityExplosiv
     public static final int SOUND_WIND_CHARGE_BURST = 509;
 
     // Burst radius — matches Nukkit-MOT and AllayMC
-    private static final double BURST_RADIUS = 2.0;
+    protected static final double BURST_RADIUS = 2.0;
 
     // Knockback constants (Nukkit-MOT style: halve existing motion + impulse)
-    private static final double HORIZONTAL_STRENGTH = 0.2;
+    protected static final double HORIZONTAL_STRENGTH = 0.2;
     private static final double VERTICAL_BOOST = 1.0;
 
     public Entity directionChanged;
@@ -46,6 +49,14 @@ public class EntityWindCharge extends EntityProjectile implements EntityExplosiv
     @Override
     public int getNetworkId() {
         return NETWORK_ID;
+    }
+
+    protected double getBurstRadius() {
+        return BURST_RADIUS;
+    }
+
+    protected double getHorizontalStrength() {
+        return HORIZONTAL_STRENGTH;
     }
 
     @Override
@@ -70,7 +81,7 @@ public class EntityWindCharge extends EntityProjectile implements EntityExplosiv
 
     @Override
     protected float getDrag() {
-        return 0.0f;
+        return 0.01f;
     }
 
     @Override
@@ -151,7 +162,7 @@ public class EntityWindCharge extends EntityProjectile implements EntityExplosiv
             return;
         }
 
-        double radius = BURST_RADIUS;
+        double radius = getBurstRadius();
         double radiusSquared = radius * radius;
         double minX = NukkitMath.floorDouble(this.x - radius - 1);
         double maxX = NukkitMath.ceilDouble(this.x + radius + 1);
@@ -179,8 +190,8 @@ public class EntityWindCharge extends EntityProjectile implements EntityExplosiv
             // Horizontal: halve existing motion + push away from center
             double kbX = entity.motionX / 2.0;
             double kbZ = entity.motionZ / 2.0;
-            kbX -= (this.x - entity.x) * HORIZONTAL_STRENGTH;
-            kbZ -= (this.z - entity.z) * HORIZONTAL_STRENGTH;
+            kbX -= (this.x - entity.x) * getHorizontalStrength();
+            kbZ -= (this.z - entity.z) * getHorizontalStrength();
 
             // Vertical: use player's actual speed for jump stacking
             // Player.speed is (from - to), so actual velocity Y = -speed.y
@@ -258,6 +269,12 @@ public class EntityWindCharge extends EntityProjectile implements EntityExplosiv
                     } else if (block instanceof BlockCandle && ((BlockCandle) block).isLit()) {
                         ((BlockCandle) block).setLit(false);
                         this.level.setBlock(block, block, true, true);
+                    } else if (block instanceof BlockCandleCake) {
+                        block.onActivate(Item.get(Item.AIR), null);
+                    } else if (block instanceof BlockChorusFlower) {
+                        this.level.useBreakOn(block, Item.get(Item.AIR), null, true);
+                    } else if (block instanceof BlockDecoratedPot) {
+                        this.level.useBreakOn(block, Item.get(Item.AIR), null, true);
                     }
                 }
             }

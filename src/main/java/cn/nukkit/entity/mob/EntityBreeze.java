@@ -1,12 +1,18 @@
 package cn.nukkit.entity.mob;
 
+import cn.nukkit.Player;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.EntityCreature;
-import cn.nukkit.entity.EntityLiving;
+import cn.nukkit.entity.projectile.EntityProjectile;
+import cn.nukkit.event.entity.EntityDamageEvent;
+import cn.nukkit.event.entity.ProjectileLaunchEvent;
 import cn.nukkit.item.Item;
 import cn.nukkit.level.format.FullChunk;
+import cn.nukkit.math.Vector3;
 import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.utils.Utils;
+
+import java.util.concurrent.ThreadLocalRandom;
 
 public class EntityBreeze extends EntityFlyingMob {
 
@@ -17,8 +23,40 @@ public class EntityBreeze extends EntityFlyingMob {
     }
 
     @Override
+    public boolean attack(EntityDamageEvent source) {
+        if (source.getCause() == EntityDamageEvent.DamageCause.FALL) {
+            return false;
+        }
+        return super.attack(source);
+    }
+
+    @Override
     public void attackEntity(Entity player) {
-        //TODO
+        if (this.distanceSquared(player) > 576) {
+            return;
+        }
+        if (this.attackDelay > 30) {
+            this.attackDelay = 0;
+
+            Entity projectile = Entity.createEntity("BreezeWindCharge",
+                    this.add(0, this.getEyeHeight(), 0), this);
+            if (projectile == null) {
+                return;
+            }
+
+            Vector3 direction = player.subtract(this).normalize()
+                    .multiply(1 + ThreadLocalRandom.current().nextFloat() * 0.2f);
+            projectile.setMotion(direction);
+
+            ProjectileLaunchEvent launch = new ProjectileLaunchEvent((EntityProjectile) projectile);
+            this.server.getPluginManager().callEvent(launch);
+            if (launch.isCancelled()) {
+                projectile.close();
+            } else {
+                projectile.spawnToAll();
+                this.level.addSound(this, "mob.breeze.shoot");
+            }
+        }
     }
 
     @Override
@@ -53,13 +91,13 @@ public class EntityBreeze extends EntityFlyingMob {
     }
 
     @Override
-    protected int nearbyDistanceMultiplier() {
-        return target instanceof EntityLiving || followTarget instanceof EntityLiving ? 1000 : 1; // don't follow
-    }
-
-    @Override
     public boolean targetOption(EntityCreature creature, double distance) {
-        //TODO
+        if (creature instanceof Player) {
+            Player player = (Player) creature;
+            return !player.closed && player.spawned && player.isAlive()
+                    && (player.isSurvival() || player.isAdventure())
+                    && distance <= 576; // 24 blocks squared
+        }
         return false;
     }
 }

@@ -22,12 +22,12 @@ public class EnchantmentWindBurst extends Enchantment {
 
     @Override
     public int getMinEnchantAbility(int level) {
-        return 10 * level;
+        return 10 + (level - 1) * 20;
     }
 
     @Override
     public int getMaxEnchantAbility(int level) {
-        return this.getMinEnchantAbility(level) + 15;
+        return this.getMinEnchantAbility(level) + 50;
     }
 
     @Override
@@ -37,12 +37,16 @@ public class EnchantmentWindBurst extends Enchantment {
 
     /**
      * Returns the upward velocity to apply to the attacker after a smash attack.
-     * Each level launches the player ~7 blocks higher (7/14/21 blocks for levels I/II/III).
-     * Uses v = sqrt(2 * g * h) where g ≈ 0.08 blocks/tick² in Minecraft physics.
+     * Uses dynamic scaling based on fall distance, capped at 7.5 blocks.
+     * Level bonus: +0.55 for II, +1.3 for III (matches PNX BreezeShootExecutor).
      */
-    public double getLaunchVelocity() {
-        double targetHeight = this.getLevel() * 7.0;
-        return Math.sqrt(2.0 * 0.08 * targetHeight);
+    public double getLaunchVelocity(double fallDistance) {
+        double clampedFall = Math.min(fallDistance, 7.5d);
+        return 0.72d + clampedFall * 0.10d + switch (this.getLevel()) {
+            case 2 -> 0.55d;
+            case 3 -> 1.3d;
+            default -> 0d;
+        };
     }
 
     /**
@@ -52,7 +56,7 @@ public class EnchantmentWindBurst extends Enchantment {
      * - Plays the mace smash air sound at the attacker's position
      *
      * The vertical launch of the attacker is handled separately in Player.java via
-     * {@link #getLaunchVelocity()}, which is applied after this method executes.
+     * {@link #getLaunchVelocity(double)}, which is applied after this method executes.
      * This method guards against non-smash hits using the same 1.5-block fall
      * threshold used in Player.java.
      */
@@ -64,7 +68,10 @@ public class EnchantmentWindBurst extends Enchantment {
 
         // Only apply gust on a genuine smash attack (attacker fell at least 1.5 blocks)
         double fallDistance = Math.max(attacker.fallDistance, attacker.highestPosition - attacker.y);
-        if (fallDistance <= 1.5d) {
+        if (fallDistance < 1.5d && attacker.motionY < -0.08d) {
+            fallDistance = Math.max(fallDistance, Math.min(2.5d, -attacker.motionY * 4d));
+        }
+        if (fallDistance < 1.5d) {
             return;
         }
 

@@ -87,6 +87,8 @@ public final class DispenseBehaviorRegister {
             }
         });
 
+        registerBehavior(ItemID.WIND_CHARGE, new ProjectileDispenseBehavior("WindCharge"));
+
         registerBehavior(ItemID.ACACIA_CHEST_BOAT, new ChestBoatDispenseBehavior());
         registerBehavior(ItemID.DARK_OAK_CHEST_BOAT, new ChestBoatDispenseBehavior());
         registerBehavior(ItemID.BIRCH_CHEST_BOAT, new ChestBoatDispenseBehavior());
