@@ -8,6 +8,8 @@ import cn.nukkit.entity.custom.CustomEntity;
 import cn.nukkit.entity.custom.EntityDefinition;
 import cn.nukkit.entity.custom.EntityManager;
 import cn.nukkit.entity.data.*;
+import cn.nukkit.entity.data.property.EntityPropertyDefinition;
+import cn.nukkit.entity.data.property.EntityPropertySchemaRegistry;
 import cn.nukkit.entity.item.EntityItem;
 import cn.nukkit.entity.item.EntityMinecartEmpty;
 import cn.nukkit.entity.item.EntityVehicle;
@@ -362,6 +364,12 @@ public abstract class Entity extends Location implements Metadatable {
             .putString(DATA_NAMETAG, "")
             .putLong(DATA_LEAD_HOLDER_EID, -1)
             .putFloat(DATA_SCALE, 1f);
+    /**
+     * Dynamic entity properties for this instance. Null until first property is set.
+     * Must only be accessed from the server tick thread.
+     * @see #setEntityProperty(String, Object)
+     */
+    private Map<String, Object> entityProperties;
     public final List<Entity> passengers = new ArrayList<>();
     public Entity riding;
     public FullChunk chunk;
@@ -2685,6 +2693,124 @@ public abstract class Entity extends Location implements Metadatable {
             return true;
         }
         return false;
+    }
+
+    // ─── Entity Properties API ───────────────────────────────────────────────────
+
+    /**
+     * Creates or updates a dynamic entity property and immediately syncs to all
+     * watching players. If this key has never been used on this entity type before,
+     * the schema is registered first and broadcast to all online players.
+     *
+     * <p>Value must be {@code Boolean}, {@code Integer}, {@code Float}, or {@code String}.
+     * Passing {@code Double} or any other type throws {@link IllegalArgumentException}.
+     * Use float literals: {@code 30.0f}, not {@code 30.0}.
+     *
+     * <p>Must be called on the server tick thread.
+     */
+    public void setEntityProperty(String key, Object value) {
+        if (!(value instanceof Boolean)
+                && !(value instanceof Integer)
+                && !(value instanceof Float)
+                && !(value instanceof String)) {
+            throw new IllegalArgumentException(
+                "Entity property value must be Boolean, Integer, Float, or String"
+                + " (got " + value.getClass().getSimpleName() + ")."
+                + (value instanceof Double ? " For float use 30.0f, not 30.0." : ""));
+        }
+
+        String typeId = this.getSaveId();
+        if (typeId.isEmpty()) return; // unregistered entity type — silently skip
+
+        EntityPropertySchemaRegistry registry = EntityPropertySchemaRegistry.get();
+        boolean schemaChanged = registry.registerOrUpdate(typeId, key, value);
+
+        if (this.entityProperties == null) {
+            this.entityProperties = new HashMap<>();
+        }
+        this.entityProperties.put(key, value);
+
+        if (schemaChanged) {
+            // New property or new enum value — broadcast updated schema to all online players
+            registry.broadcastSchema(typeId, this.server.getOnlinePlayers().values());
+        }
+
+        if (!this.hasSpawned.isEmpty()) {
+            this.sendEntityPropertyValue(key, value);
+        }
+    }
+
+    /**
+     * Returns the current value of a property, or {@code null} if not set.
+     * Return type is one of: {@code Boolean}, {@code Integer}, {@code Float}, {@code String}.
+     * Use {@code instanceof} checks before casting.
+     *
+     * <p>Must be called on the server tick thread.
+     */
+    public Object getEntityProperty(String key) {
+        if (this.entityProperties == null) return null;
+        return this.entityProperties.get(key);
+    }
+
+    /**
+     * Removes a property and sends an all-zero reset packet to watching players so
+     * the client clears its state. The property NAME stays in the schema permanently
+     * for this server session (indices must remain stable).
+     *
+     * <p>No-op if the property is not currently set.
+     *
+     * <p>Must be called on the server tick thread.
+     */
+    public void removeEntityProperty(String key) {
+        if (this.entityProperties == null || !this.entityProperties.containsKey(key)) {
+            return; // no-op
+        }
+        this.entityProperties.remove(key);
+        if (this.entityProperties.isEmpty()) {
+            this.entityProperties = null;
+        }
+
+        if (!this.hasSpawned.isEmpty()) {
+            // Send all-zero reset: client reads only the field matching schema type,
+            // zero is a valid default for all types — no schema lookup needed.
+            ChangeMobPropertyPacket pk = new ChangeMobPropertyPacket();
+            pk.uniqueEntityId = this.id;
+            pk.property = key;
+            // boolValue=false, intValue=0, floatValue=0f, stringValue="" — all defaults
+            for (Player player : this.hasSpawned.values()) {
+                player.dataPacket(pk);
+            }
+        }
+    }
+
+    /**
+     * Returns an unmodifiable view of all current entity properties, or an empty
+     * map if none are set.
+     */
+    public Map<String, Object> getEntityProperties() {
+        if (this.entityProperties == null) return Collections.emptyMap();
+        return Collections.unmodifiableMap(this.entityProperties);
+    }
+
+    // ─── Private entity property helpers ─────────────────────────────────────────
+
+    /** Sends a ChangeMobPropertyPacket for one property to all watching players. */
+    private void sendEntityPropertyValue(String key, Object value) {
+        ChangeMobPropertyPacket pk = new ChangeMobPropertyPacket();
+        pk.uniqueEntityId = this.id;
+        pk.property = key;
+        if (value instanceof Boolean) {
+            pk.boolValue = (Boolean) value;
+        } else if (value instanceof Integer) {
+            pk.intValue = (Integer) value;
+        } else if (value instanceof Float) {
+            pk.floatValue = (Float) value;
+        } else if (value instanceof String) {
+            pk.stringValue = (String) value;
+        }
+        for (Player player : this.hasSpawned.values()) {
+            player.dataPacket(pk);
+        }
     }
 
     public void setGenericFlag(int propertyId, boolean value) {
