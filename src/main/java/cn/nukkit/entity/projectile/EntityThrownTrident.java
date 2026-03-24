@@ -22,6 +22,8 @@ import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.nbt.tag.DoubleTag;
 import cn.nukkit.nbt.tag.IntTag;
 import cn.nukkit.nbt.tag.ListTag;
+import cn.nukkit.block.Block;
+import cn.nukkit.block.BlockID;
 import cn.nukkit.network.protocol.LevelSoundEventPacket;
 
 public class EntityThrownTrident extends EntityProjectile {
@@ -95,7 +97,7 @@ public class EntityThrownTrident extends EntityProjectile {
 
     @Override
     public float getGravity() {
-        return 0.04f;
+        return 0.10f;
     }
 
     @Override
@@ -236,6 +238,24 @@ public class EntityThrownTrident extends EntityProjectile {
         super.onHitGround(moveVector);
 
         this.setStuckToBlockPos(new BlockVector3(moveVector.getFloorX(), moveVector.getFloorY(), moveVector.getFloorZ()));
+
+        // Bedrock-exclusive: Channeling triggers on lightning rods during rain (no thunderstorm needed)
+        if (this.hasChanneling && !this.didHit) {
+            Block hitBlock = this.level.getBlock(moveVector);
+            if (hitBlock.getId() == BlockID.LIGHTNING_ROD && this.level.isRaining()) {
+                this.didHit = true;
+                EntityLightning bolt = (EntityLightning) Entity.createEntity(EntityLightning.NETWORK_ID, this.getChunk(), getDefaultNBT(this));
+                LightningStrikeEvent strikeEvent = new LightningStrikeEvent(level, bolt);
+                server.getPluginManager().callEvent(strikeEvent);
+                if (!strikeEvent.isCancelled()) {
+                    bolt.spawnToAll();
+                    level.addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_ITEM_TRIDENT_THUNDER);
+                } else {
+                    bolt.setEffect(false);
+                }
+            }
+        }
+
         if (this.canReturnToShooter()) {
             this.getLevel().addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_ITEM_TRIDENT_RETURN);
             this.noClip = true;

@@ -1,10 +1,13 @@
 package cn.nukkit.entity.projectile;
 
 import cn.nukkit.entity.Entity;
-import cn.nukkit.item.Item;
+import cn.nukkit.entity.mob.EntityBlaze;
 import cn.nukkit.level.format.FullChunk;
-import cn.nukkit.level.particle.ItemBreakParticle;
+import cn.nukkit.level.particle.GenericParticle;
+import cn.nukkit.level.particle.Particle;
 import cn.nukkit.nbt.tag.CompoundTag;
+
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * @author MagicDroidX
@@ -13,6 +16,23 @@ import cn.nukkit.nbt.tag.CompoundTag;
 public class EntitySnowball extends EntityProjectile {
 
     public static final int NETWORK_ID = 81;
+
+    private static final byte[] particleCounts = new byte[24];
+    private static int particleIndex = 0;
+
+    static {
+        for (int i = 0; i < particleCounts.length; i++) {
+            particleCounts[i] = (byte) (ThreadLocalRandom.current().nextInt(10) + 5);
+        }
+    }
+
+    private static int nextParticleCount() {
+        int index = particleIndex++;
+        if (index >= particleCounts.length) {
+            particleIndex = index = 0;
+        }
+        return particleCounts[index];
+    }
 
     public EntitySnowball(FullChunk chunk, CompoundTag nbt) {
         this(chunk, nbt, null);
@@ -53,8 +73,13 @@ public class EntitySnowball extends EntityProjectile {
     }
 
     @Override
+    public int getResultDamage(Entity entity) {
+        return entity instanceof EntityBlaze ? 3 : super.getResultDamage();
+    }
+
+    @Override
     public void onHit() {
-        level.addParticle(new ItemBreakParticle(this, Item.get(Item.SNOWBALL)), null, 5);
+        level.addParticle(new GenericParticle(this, Particle.TYPE_SNOWBALL_POOF), null, nextParticleCount());
     }
 
     @Override
@@ -63,7 +88,7 @@ public class EntitySnowball extends EntityProjectile {
             return false;
         }
 
-        if (this.age > 1200 || this.isCollided || this.hadCollision) {
+        if (this.age > 1200 || this.isCollided) {
             this.close();
             return false;
         }

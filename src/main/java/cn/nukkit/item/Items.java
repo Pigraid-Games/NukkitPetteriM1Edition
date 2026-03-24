@@ -312,6 +312,13 @@ class Items {
         list[CHERRY_DOOR] = ItemDoorCherry.class; //799
         list[CHERRY_SIGN] = ItemSignCherry.class; //800
         list[SOUL_CAMPFIRE] = ItemCampfireSoul.class; //801
+        list[WOODEN_SPEAR] = ItemWoodenSpear.class; //802
+        list[STONE_SPEAR] = ItemStoneSpear.class; //803
+        list[IRON_SPEAR] = ItemIronSpear.class; //804
+        list[GOLDEN_SPEAR] = ItemGoldenSpear.class; //805
+        list[DIAMOND_SPEAR] = ItemDiamondSpear.class; //806
+        list[NETHERITE_SPEAR] = ItemNetheriteSpear.class; //807
+        list[COPPER_SPEAR] = ItemCopperSpear.class; //808
         list[GLOW_ITEM_FRAME] = ItemItemFrameGlow.class; //850
     }
 }

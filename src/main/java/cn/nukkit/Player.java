@@ -1363,7 +1363,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
             }
         }
 
-        if (!CustomBlockManager.get().getBlockDefinitions().isEmpty()) {
+        if (!CustomBlockManager.get().getBlockDefinitions().isEmpty() || this.protocol >= ProtocolInfo.v1_21_130_28) {
             startGamePacket.experiments.add(new ExperimentData("data_driven_items", true));
         }
 
@@ -1399,6 +1399,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         if (this.protocol >= ProtocolInfo.v1_8_0) {
             if (this.protocol >= ProtocolInfo.v1_12_0) {
                 if (this.protocol >= ProtocolInfo.v1_21_60 || (CustomItemManager.get().hasCustomItems() && this.protocol >= ProtocolInfo.v1_16_100)) {
+                    server.getLogger().info("[SpearDebug] Sending ItemComponentPacket to " + this.username + " protocol=" + this.protocol);
                     this.dataPacket(CustomItemManager.get().getCachedPacket(this.protocol));
                 }
                 this.dataPacket(BiomeDefinitionListPacket.getCachedPacket(this.protocol));
@@ -2571,7 +2572,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                         ResourcePackStackPacket stackPacket = new ResourcePackStackPacket();
                         stackPacket.mustAccept = this.server.getForceResources() && !this.server.forceResourcesAllowOwnPacks; // Option not to disable client's own packs
                         stackPacket.resourcePackStack = this.server.getResourcePackManager().getResourceStack();
-                        if (!CustomBlockManager.get().getBlockDefinitions().isEmpty()) {
+                        if (!CustomBlockManager.get().getBlockDefinitions().isEmpty() || this.protocol >= ProtocolInfo.v1_21_130_28) {
                             stackPacket.experiments.add(new ExperimentData("data_driven_items", true));
                         }
                         this.dataPacket(stackPacket);
@@ -2979,6 +2980,25 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
                 if (this.adventureSettings.get(AdventureSettings.Type.FLYING)) {
                     this.flySneaking = authPacket.getInputData().contains(AuthInputAction.SNEAKING);
+                }
+
+                // Embedded item interaction (PERFORM_ITEM_INTERACTION) — kept for future protocol support.
+                if (authPacket.embeddedItemInteraction != null) {
+                    server.getLogger().info("[SpearDebug] PERFORM_ITEM_INTERACTION: actionType=" + authPacket.embeddedItemInteraction.actionType + " item=" + this.inventory.getItemInHand().getName());
+                    if (authPacket.embeddedItemInteraction.actionType == InventoryTransactionPacket.USE_ITEM_ACTION_SPEAR_STAB
+                            && this.spawned && this.isAlive()) {
+                        Item embeddedSpearItem = this.inventory.getItemInHand();
+                        if (embeddedSpearItem instanceof ItemSpear embeddedSpear) {
+                            embeddedSpear.onSpearStab(this, this.getMovementSpeed());
+                        }
+                    }
+                }
+                // Log PERFORM_ITEM_INTERACTION flag presence regardless of decoded data
+                if (authPacket.getInputData().contains(cn.nukkit.network.protocol.types.AuthInputAction.PERFORM_ITEM_INTERACTION)) {
+                    Item heldNow = this.inventory.getItemInHand();
+                    if (heldNow instanceof ItemSpear) {
+                        server.getLogger().info("[SpearDebug] PERFORM_ITEM_INTERACTION flag SET, decoded=" + (authPacket.embeddedItemInteraction != null) + " item=" + heldNow.getName());
+                    }
                 }
 
                 Vector3 clientPosition = authPacket.getPosition().subtract(0, this.riding == null ? this.getBaseOffset() : this.riding.getMountedYOffset(), 0).asVector3();
@@ -4131,6 +4151,9 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                         this.needSendInventory = true;
                         return;
                     case InventoryTransactionPacket.TYPE_USE_ITEM:
+                        if (this.inventory.getItemInHand() instanceof ItemSpear) {
+                            server.getLogger().info("[SpearDebug] TYPE_USE_ITEM actionType=" + ((cn.nukkit.inventory.transaction.data.UseItemData) transactionPacket.transactionData).actionType + " item=" + this.inventory.getItemInHand().getName());
+                        }
                         UseItemData useItemData = (UseItemData) transactionPacket.transactionData;
                         BlockVector3 blockVector = useItemData.blockPos;
                         BlockFace face = useItemData.face;
@@ -4327,6 +4350,15 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                                     }
                                 }
 
+                                return;
+                            case InventoryTransactionPacket.USE_ITEM_ACTION_SPEAR_STAB:
+                                if (!this.spawned || !this.isAlive()) {
+                                    return;
+                                }
+                                Item spearStabItem = this.inventory.getItemInHand();
+                                if (spearStabItem instanceof ItemSpear spearForStab) {
+                                    spearForStab.onSpearStab(this, this.getMovementSpeed());
+                                }
                                 return;
                         }
                         return;
@@ -5074,17 +5106,37 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                 }
             }
 
-            // Spear stab — triggered by sprinting movement
             Item heldItem = this.inventory.getItemInHand();
-            if (heldItem instanceof ItemSpear && this.isSprinting() && distanceSquared >= 0.01) {
-                ((ItemSpear) heldItem).onSpearStab(this, this.getMovementSpeed());
+
+            // Spear charge attack — fires only when holding the use button (spear lowered).
+            // The jab/stab is NOT triggered by movement; it fires on click-attack via onSpearJabClick.
+            if (heldItem instanceof ItemSpear && this.isUsingItem()) {
+                double cdx = this.x - from.x;
+                double cdy = this.y - from.y;
+                double cdz = this.z - from.z;
+                ((ItemSpear) heldItem).onChargeMovement(this, cdx, cdy, cdz);
             }
 
-            // Spear charge attack — triggered while holding use button (spear is lowered).
-            // No movement requirement on the holder: relative velocity is computed per-target inside,
-            // so an enemy running into a stationary spear is handled correctly.
-            if (heldItem instanceof ItemSpear && this.isUsingItem()) {
-                ((ItemSpear) heldItem).onChargeMovement(this);
+            // Reverse charge: this player is moving toward a nearby spear holder in charge mode.
+            // Handles the "target falls/runs onto a stationary spear" scenario — the holder's
+            // movement handler would have dx=0, but the target's own velocity is used here instead.
+            // player.getMotion() is reset to (0,0,0) every tick for players (line ~5939), so this
+            // reverse lookup from the moving target's own movement packet is the only reliable path.
+            {
+                double selfDx = this.x - from.x;
+                double selfDy = this.y - from.y;
+                double selfDz = this.z - from.z;
+                double selfSpeedSq = selfDx * selfDx + selfDy * selfDy + selfDz * selfDz;
+                if (selfSpeedSq > 0.0001) {
+                    AxisAlignedBB nearbyBox = this.getBoundingBox().grow(2.5, 2.0, 2.5);
+                    for (Entity nearby : this.level.getNearbyEntities(nearbyBox, this)) {
+                        if (!(nearby instanceof Player holder) || !holder.isAlive() || !holder.isUsingItem()) continue;
+                        Item holderItem = holder.getInventory().getItemInHand();
+                        if (holderItem instanceof ItemSpear spear) {
+                            spear.onChargeFromTarget(holder, this, selfDx, selfDy, selfDz);
+                        }
+                    }
+                }
             }
 
             Item boots = this.inventory.getBootsFast();

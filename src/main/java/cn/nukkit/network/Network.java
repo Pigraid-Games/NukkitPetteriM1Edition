@@ -236,6 +236,7 @@ public class Network {
         this.registerPacket(ProtocolInfo.CLIENT_TO_SERVER_HANDSHAKE_PACKET, ClientToServerHandshakePacket.class);
         this.registerPacket(ProtocolInfo.CLIENT_CACHE_STATUS_PACKET, ClientCacheStatusPacket.class);
         this.registerPacket(ProtocolInfo.__INTERNAL__SERVERBOUND_LOADING_SCREEN_PACKET, ServerboundLoadingScreenPacket.class);
+        this.registerPacket(ProtocolInfo.__INTERNAL__MOVEMENT_PREDICTION_SYNC_PACKET, ClientMovementPredictionSyncPacket.class);
         this.registerPacket(ProtocolInfo.REQUEST_PERMISSIONS_PACKET, RequestPermissionsPacket.class);
         this.registerPacket(ProtocolInfo.SET_DEFAULT_GAME_TYPE_PACKET, SetDefaultGameTypePacket.class);
         this.registerPacket(ProtocolInfo.SETTINGS_COMMAND_PACKET, SettingsCommandPacket.class);
@@ -265,6 +266,7 @@ public class Network {
             this.registerPacket(ProtocolInfo.BOSS_EVENT_PACKET, BossEventPacket.class);
             this.registerPacket(ProtocolInfo.ANVIL_DAMAGE_PACKET, AnvilDamagePacket.class);
             this.registerPacket(ProtocolInfo.ITEM_FRAME_DROP_ITEM_PACKET, ItemFrameDropItemPacket.class);
+            this.registerPacket(ProtocolInfo.__INTERNAL__SET_PLAYER_INVENTORY_OPTIONS_PACKET, SetPlayerInventoryOptionsPacket.class);
         }
     }
 

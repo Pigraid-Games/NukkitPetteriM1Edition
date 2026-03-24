@@ -5,7 +5,6 @@ import cn.nukkit.block.Block;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.EntityLiving;
 import cn.nukkit.entity.item.*;
-import cn.nukkit.entity.mob.EntityBlaze;
 import cn.nukkit.entity.mob.EntityEnderDragon;
 import cn.nukkit.event.entity.*;
 import cn.nukkit.event.entity.EntityDamageEvent.DamageCause;
@@ -103,6 +102,17 @@ public abstract class EntityProjectile extends Entity {
     }
 
     /**
+     * Get the amount of damage this projectile will deal to a specific entity.
+     * Subclasses can override this to apply entity-specific damage modifiers.
+     *
+     * @param entity the entity being hit
+     * @return damage
+     */
+    public int getResultDamage(Entity entity) {
+        return getResultDamage();
+    }
+
+    /**
      * Add inaccuracy to projectile movement. Used internally with dispensers.
      *
      * @param modifier multiplier
@@ -134,7 +144,7 @@ public abstract class EntityProjectile extends Entity {
 
     public void onCollideWithEntity(Entity entity) {
         this.server.getPluginManager().callEvent(new ProjectileHitEvent(this, MovingObjectPosition.fromEntity(entity)));
-        float damage = this instanceof EntitySnowball && entity instanceof EntityBlaze ? 3 : this.getResultDamage();
+        float damage = this.getResultDamage(entity);
 
         EntityDamageEvent ev;
         if (this.shootingEntity == null) {

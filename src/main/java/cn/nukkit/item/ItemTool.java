@@ -18,6 +18,7 @@ public abstract class ItemTool extends Item implements ItemDurable {
     public static final int TIER_IRON = 4;
     public static final int TIER_DIAMOND = 5;
     public static final int TIER_NETHERITE = 6;
+    public static final int TIER_COPPER = 7;
 
     public static final int TYPE_NONE = 0;
     public static final int TYPE_SWORD = 1;
@@ -26,6 +27,7 @@ public abstract class ItemTool extends Item implements ItemDurable {
     public static final int TYPE_AXE = 4;
     public static final int TYPE_SHEARS = 5;
     public static final int TYPE_HOE = 6;
+    public static final int TYPE_SPEAR = 7;
 
     // Using vanilla durability + 1 here
     public static final int DURABILITY_WOODEN = 60;
@@ -38,6 +40,7 @@ public abstract class ItemTool extends Item implements ItemDurable {
     public static final int DURABILITY_SHEARS = 239;
     public static final int DURABILITY_BOW = 385;
     public static final int DURABILITY_CROSSBOW = 465;
+    public static final int DURABILITY_COPPER = 191;
     public static final int DURABILITY_TRIDENT = 251;
     public static final int DURABILITY_FISHING_ROD = 385;
     public static final int DURABILITY_CARROT_ON_A_STICK = 26;
@@ -85,7 +88,7 @@ public abstract class ItemTool extends Item implements ItemDurable {
         return 1;
     }
 
-    private boolean isDurable() {
+    protected boolean isDurable() {
         Enchantment durability = getEnchantment(Enchantment.ID_DURABILITY);
         return durability != null && durability.getLevel() > 0 && (100 / (durability.getLevel() + 1)) <= ThreadLocalRandom.current().nextInt(100);
     }
