@@ -8,6 +8,8 @@ import cn.nukkit.entity.custom.CustomEntity;
 import cn.nukkit.entity.custom.EntityDefinition;
 import cn.nukkit.entity.custom.EntityManager;
 import cn.nukkit.entity.data.*;
+import cn.nukkit.entity.data.property.EntityPropertyDefinition;
+import cn.nukkit.entity.data.property.EntityPropertySchemaRegistry;
 import cn.nukkit.entity.item.EntityItem;
 import cn.nukkit.entity.item.EntityMinecartEmpty;
 import cn.nukkit.entity.item.EntityVehicle;
@@ -362,6 +364,12 @@ public abstract class Entity extends Location implements Metadatable {
             .putString(DATA_NAMETAG, "")
             .putLong(DATA_LEAD_HOLDER_EID, -1)
             .putFloat(DATA_SCALE, 1f);
+    /**
+     * Dynamic entity properties for this instance. Null until first property is set.
+     * Must only be accessed from the server tick thread.
+     * @see #setEntityProperty(String, Object)
+     */
+    private Map<String, Object> entityProperties;
     public final List<Entity> passengers = new ArrayList<>();
     public Entity riding;
     public FullChunk chunk;
@@ -994,6 +1002,44 @@ public abstract class Entity extends Location implements Metadatable {
         addEntity.speedY = (float) this.motionY;
         addEntity.speedZ = (float) this.motionZ;
         addEntity.metadata = this.dataProperties.clone();
+
+        // Populate index-based entity property arrays (int, bool, float).
+        // String/enum properties are handled separately in spawnTo().
+        if (this.entityProperties != null && !this.entityProperties.isEmpty()) {
+            String typeId = this.getSaveId();
+            List<EntityPropertyDefinition> schema =
+                    EntityPropertySchemaRegistry.get().getSchema(typeId);
+            List<Integer> intIndices = new ArrayList<>();
+            List<Integer> intValues  = new ArrayList<>();
+            List<Integer> floatIndices = new ArrayList<>();
+            List<Float>   floatValues  = new ArrayList<>();
+            for (EntityPropertyDefinition def : schema) {
+                Object val = this.entityProperties.get(def.getName());
+                if (val == null) continue;
+                switch (def.getType()) {
+                    case EntityPropertyDefinition.TYPE_INT:
+                        intIndices.add(def.getIndex());
+                        intValues.add((Integer) val);
+                        break;
+                    case EntityPropertyDefinition.TYPE_BOOL:
+                        intIndices.add(def.getIndex());
+                        intValues.add((Boolean) val ? 1 : 0);
+                        break;
+                    case EntityPropertyDefinition.TYPE_FLOAT:
+                        floatIndices.add(def.getIndex());
+                        floatValues.add((Float) val);
+                        break;
+                    // TYPE_ENUM skipped — sent via ChangeMobPropertyPacket in spawnTo()
+                }
+            }
+            addEntity.intPropertyIndices   = intIndices.stream().mapToInt(i -> i).toArray();
+            addEntity.intPropertyValues    = intValues.stream().mapToInt(i -> i).toArray();
+            addEntity.floatPropertyIndices = floatIndices.stream().mapToInt(i -> i).toArray();
+            // Java has no FloatStream — convert List<Float> to float[] manually
+            float[] fArr = new float[floatValues.size()];
+            for (int i = 0; i < floatValues.size(); i++) fArr[i] = floatValues.get(i);
+            addEntity.floatPropertyValues  = fArr;
+        }
 
         addEntity.links = new EntityLink[this.passengers.size()];
         for (int i = 0; i < addEntity.links.length; i++) {
@@ -2687,6 +2733,124 @@ public abstract class Entity extends Location implements Metadatable {
         return false;
     }
 
+    // ─── Entity Properties API ───────────────────────────────────────────────────
+
+    /**
+     * Creates or updates a dynamic entity property and immediately syncs to all
+     * watching players. If this key has never been used on this entity type before,
+     * the schema is registered first and broadcast to all online players.
+     *
+     * <p>Value must be {@code Boolean}, {@code Integer}, {@code Float}, or {@code String}.
+     * Passing {@code Double} or any other type throws {@link IllegalArgumentException}.
+     * Use float literals: {@code 30.0f}, not {@code 30.0}.
+     *
+     * <p>Must be called on the server tick thread.
+     */
+    public void setEntityProperty(String key, Object value) {
+        if (!(value instanceof Boolean)
+                && !(value instanceof Integer)
+                && !(value instanceof Float)
+                && !(value instanceof String)) {
+            throw new IllegalArgumentException(
+                "Entity property value must be Boolean, Integer, Float, or String"
+                + " (got " + value.getClass().getSimpleName() + ")."
+                + (value instanceof Double ? " For float use 30.0f, not 30.0." : ""));
+        }
+
+        String typeId = this.getSaveId();
+        if (typeId.isEmpty()) return; // unregistered entity type — silently skip
+
+        EntityPropertySchemaRegistry registry = EntityPropertySchemaRegistry.get();
+        boolean schemaChanged = registry.registerOrUpdate(typeId, key, value);
+
+        if (this.entityProperties == null) {
+            this.entityProperties = new HashMap<>();
+        }
+        this.entityProperties.put(key, value);
+
+        if (schemaChanged) {
+            // New property or new enum value — broadcast updated schema to all online players
+            registry.broadcastSchema(typeId, this.server.getOnlinePlayers().values());
+        }
+
+        if (!this.hasSpawned.isEmpty()) {
+            this.sendEntityPropertyValue(key, value);
+        }
+    }
+
+    /**
+     * Returns the current value of a property, or {@code null} if not set.
+     * Return type is one of: {@code Boolean}, {@code Integer}, {@code Float}, {@code String}.
+     * Use {@code instanceof} checks before casting.
+     *
+     * <p>Must be called on the server tick thread.
+     */
+    public Object getEntityProperty(String key) {
+        if (this.entityProperties == null) return null;
+        return this.entityProperties.get(key);
+    }
+
+    /**
+     * Removes a property and sends an all-zero reset packet to watching players so
+     * the client clears its state. The property NAME stays in the schema permanently
+     * for this server session (indices must remain stable).
+     *
+     * <p>No-op if the property is not currently set.
+     *
+     * <p>Must be called on the server tick thread.
+     */
+    public void removeEntityProperty(String key) {
+        if (this.entityProperties == null || !this.entityProperties.containsKey(key)) {
+            return; // no-op
+        }
+        this.entityProperties.remove(key);
+        if (this.entityProperties.isEmpty()) {
+            this.entityProperties = null;
+        }
+
+        if (!this.hasSpawned.isEmpty()) {
+            // Send all-zero reset: client reads only the field matching schema type,
+            // zero is a valid default for all types — no schema lookup needed.
+            ChangeMobPropertyPacket pk = new ChangeMobPropertyPacket();
+            pk.uniqueEntityId = this.id;
+            pk.property = key;
+            // boolValue=false, intValue=0, floatValue=0f, stringValue="" — all defaults
+            for (Player player : this.hasSpawned.values()) {
+                player.dataPacket(pk);
+            }
+        }
+    }
+
+    /**
+     * Returns an unmodifiable view of all current entity properties, or an empty
+     * map if none are set.
+     */
+    public Map<String, Object> getEntityProperties() {
+        if (this.entityProperties == null) return Collections.emptyMap();
+        return Collections.unmodifiableMap(this.entityProperties);
+    }
+
+    // ─── Private entity property helpers ─────────────────────────────────────────
+
+    /** Sends a ChangeMobPropertyPacket for one property to all watching players. */
+    private void sendEntityPropertyValue(String key, Object value) {
+        ChangeMobPropertyPacket pk = new ChangeMobPropertyPacket();
+        pk.uniqueEntityId = this.id;
+        pk.property = key;
+        if (value instanceof Boolean) {
+            pk.boolValue = (Boolean) value;
+        } else if (value instanceof Integer) {
+            pk.intValue = (Integer) value;
+        } else if (value instanceof Float) {
+            pk.floatValue = (Float) value;
+        } else if (value instanceof String) {
+            pk.stringValue = (String) value;
+        }
+        for (Player player : this.hasSpawned.values()) {
+            player.dataPacket(pk);
+        }
+    }
+
     public void setGenericFlag(int propertyId, boolean value) {
         this.setDataFlag(propertyId >= 64 ? DATA_FLAGS_EXTENDED : DATA_FLAGS, propertyId % 64, value);
     }
@@ -2930,8 +3094,29 @@ public abstract class Entity extends Location implements Metadatable {
         if (!this.hasSpawned.containsKey(player.getLoaderId())) {
             Boolean hasChunk = player.usedChunks.get(Level.chunkHash(this.chunk.getX(), this.chunk.getZ()));
             if (hasChunk != null && hasChunk) {
+                // NEW ↓ Send schema before AddEntityPacket so client knows property definitions
+                if (this.entityProperties != null) {
+                    String typeId = this.getSaveId();
+                    if (!typeId.isEmpty()) {
+                        EntityPropertySchemaRegistry.get().sendSchema(typeId, player);
+                    }
+                }
+                // EXISTING ↓ (unchanged)
                 player.dataPacket(createAddEntityPacket());
                 this.hasSpawned.put(player.getLoaderId(), player);
+                // NEW ↓ String/enum properties can't fit in index-based arrays; send now
+                if (this.entityProperties != null) {
+                    for (Map.Entry<String, Object> entry : this.entityProperties.entrySet()) {
+                        if (entry.getValue() instanceof String) {
+                            ChangeMobPropertyPacket propPk = new ChangeMobPropertyPacket();
+                            propPk.uniqueEntityId = this.id;
+                            propPk.property = entry.getKey();
+                            propPk.stringValue = (String) entry.getValue();
+                            player.dataPacket(propPk);
+                        }
+                    }
+                }
+                // EXISTING ↓ riding + vanillaBossBar blocks continue unchanged after this line
 
                 if (this.riding != null) {
                     this.riding.spawnTo(player);

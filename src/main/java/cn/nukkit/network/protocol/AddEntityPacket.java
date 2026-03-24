@@ -171,6 +171,12 @@ public class AddEntityPacket extends DataPacket {
     public EntityMetadata metadata = new EntityMetadata();
     public Attribute[] attributes = new Attribute[0];
     public EntityLink[] links = new EntityLink[0];
+    /** Pre-computed int/bool property index-value pairs for EntityProperties encoding. */
+    public int[] intPropertyIndices  = new int[0];
+    public int[] intPropertyValues   = new int[0];
+    /** Pre-computed float property index-value pairs. */
+    public int[]   floatPropertyIndices = new int[0];
+    public float[] floatPropertyValues  = new float[0];
 
     @Override
     public void decode() {
@@ -200,8 +206,16 @@ public class AddEntityPacket extends DataPacket {
         this.putAttributeList(this.attributes);
         this.put(Binary.writeMetadata(protocol, this.metadata));
         if (protocol >= ProtocolInfo.v1_19_40) {
-            this.putUnsignedVarInt(0); // Entity properties int
-            this.putUnsignedVarInt(0); // Entity properties float
+            this.putUnsignedVarInt(intPropertyIndices.length);
+            for (int i = 0; i < intPropertyIndices.length; i++) {
+                this.putUnsignedVarInt(intPropertyIndices[i]);
+                this.putVarInt(intPropertyValues[i]);
+            }
+            this.putUnsignedVarInt(floatPropertyIndices.length);
+            for (int i = 0; i < floatPropertyIndices.length; i++) {
+                this.putUnsignedVarInt(floatPropertyIndices[i]);
+                this.putLFloat(floatPropertyValues[i]);
+            }
         }
         this.putUnsignedVarInt(this.links.length);
         for (EntityLink link : links) {

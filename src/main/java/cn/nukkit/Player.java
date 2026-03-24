@@ -13,6 +13,7 @@ import cn.nukkit.command.data.CommandDataVersions;
 import cn.nukkit.entity.*;
 import cn.nukkit.entity.custom.EntityManager;
 import cn.nukkit.entity.data.*;
+import cn.nukkit.entity.data.property.EntityPropertySchemaRegistry;
 import cn.nukkit.entity.item.*;
 import cn.nukkit.entity.mob.EntityEnderman;
 import cn.nukkit.entity.mob.EntityWalkingMob;
@@ -1375,6 +1376,12 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         startGamePacket.forceNoServerAuthBlockBreaking = !this.isMovementServerAuthoritative() && this.protocol >= ProtocolInfo.v1_17_0; // Plugin workaround
         startGamePacket.emoteChatMuted = server.muteEmoteChat;
         this.forceDataPacket(startGamePacket, null);
+        // Send all registered entity property schemas so the client knows
+        // every entity type's property definitions before entities spawn.
+        EntityPropertySchemaRegistry registry = EntityPropertySchemaRegistry.get();
+        for (String typeId : registry.getAllEntityTypeIds()) {
+            registry.sendSchema(typeId, this);
+        }
 
         this.loggedIn = true;
 
