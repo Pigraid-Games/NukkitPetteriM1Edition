@@ -10,7 +10,9 @@ import cn.nukkit.level.format.FullChunk;
 import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.nbt.tag.ListTag;
 import cn.nukkit.nbt.tag.StringTag;
+import cn.nukkit.entity.data.property.EntityPropertySchemaRegistry;
 import cn.nukkit.network.protocol.AddPlayerPacket;
+import cn.nukkit.network.protocol.ChangeMobPropertyPacket;
 import cn.nukkit.network.protocol.PlayerListPacket;
 import cn.nukkit.network.protocol.SetEntityLinkPacket;
 import cn.nukkit.utils.*;
@@ -311,6 +313,10 @@ public class EntityHuman extends EntityHumanType {
     }
 
     @Override
+    public String getSaveId() {
+        return "minecraft:player";
+    }
+
     public void spawnTo(Player player) {
         if (this != player && !this.hasSpawned.containsKey(player.getLoaderId())) {
             this.hasSpawned.put(player.getLoaderId(), player);
@@ -343,6 +349,28 @@ public class EntityHuman extends EntityHumanType {
             pk.item = this.getInventory().getItemInHand();
             pk.metadata = this.dataProperties.clone();
             player.dataPacket(pk);
+
+            // Send entity properties. AddPlayerPacket has no index arrays unlike AddEntityPacket,
+            // so ALL types (bool, int, float, string/enum) must be sent via ChangeMobPropertyPacket.
+            java.util.Map<String, Object> props = this.getEntityProperties();
+            if (!props.isEmpty()) {
+                for (java.util.Map.Entry<String, Object> entry : props.entrySet()) {
+                    ChangeMobPropertyPacket propPk = new ChangeMobPropertyPacket();
+                    propPk.uniqueEntityId = this.id;
+                    propPk.property = entry.getKey();
+                    Object val = entry.getValue();
+                    if (val instanceof Boolean) {
+                        propPk.boolValue = (Boolean) val;
+                    } else if (val instanceof Integer) {
+                        propPk.intValue = (Integer) val;
+                    } else if (val instanceof Float) {
+                        propPk.floatValue = (Float) val;
+                    } else if (val instanceof String) {
+                        propPk.stringValue = (String) val;
+                    }
+                    player.dataPacket(propPk);
+                }
+            }
 
             if (this instanceof Player) {
                 this.inventory.sendArmorContents(player);

@@ -1711,7 +1711,7 @@ public abstract class Entity extends Location implements Metadatable {
         return riding;
     }
 
-    public final String getSaveId() {
+    public String getSaveId() {
         if (this instanceof CustomEntity) {
             EntityDefinition definition = ((CustomEntity) this).getEntityDefinition();
             return definition == null ? "" : definition.getIdentifier();
