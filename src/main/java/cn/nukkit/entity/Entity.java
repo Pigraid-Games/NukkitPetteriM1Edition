@@ -1003,6 +1003,44 @@ public abstract class Entity extends Location implements Metadatable {
         addEntity.speedZ = (float) this.motionZ;
         addEntity.metadata = this.dataProperties.clone();
 
+        // Populate index-based entity property arrays (int, bool, float).
+        // String/enum properties are handled separately in spawnTo().
+        if (this.entityProperties != null && !this.entityProperties.isEmpty()) {
+            String typeId = this.getSaveId();
+            List<EntityPropertyDefinition> schema =
+                    EntityPropertySchemaRegistry.get().getSchema(typeId);
+            List<Integer> intIndices = new ArrayList<>();
+            List<Integer> intValues  = new ArrayList<>();
+            List<Integer> floatIndices = new ArrayList<>();
+            List<Float>   floatValues  = new ArrayList<>();
+            for (EntityPropertyDefinition def : schema) {
+                Object val = this.entityProperties.get(def.getName());
+                if (val == null) continue;
+                switch (def.getType()) {
+                    case EntityPropertyDefinition.TYPE_INT:
+                        intIndices.add(def.getIndex());
+                        intValues.add((Integer) val);
+                        break;
+                    case EntityPropertyDefinition.TYPE_BOOL:
+                        intIndices.add(def.getIndex());
+                        intValues.add((Boolean) val ? 1 : 0);
+                        break;
+                    case EntityPropertyDefinition.TYPE_FLOAT:
+                        floatIndices.add(def.getIndex());
+                        floatValues.add((Float) val);
+                        break;
+                    // TYPE_ENUM skipped — sent via ChangeMobPropertyPacket in spawnTo()
+                }
+            }
+            addEntity.intPropertyIndices   = intIndices.stream().mapToInt(i -> i).toArray();
+            addEntity.intPropertyValues    = intValues.stream().mapToInt(i -> i).toArray();
+            addEntity.floatPropertyIndices = floatIndices.stream().mapToInt(i -> i).toArray();
+            // Java has no FloatStream — convert List<Float> to float[] manually
+            float[] fArr = new float[floatValues.size()];
+            for (int i = 0; i < floatValues.size(); i++) fArr[i] = floatValues.get(i);
+            addEntity.floatPropertyValues  = fArr;
+        }
+
         addEntity.links = new EntityLink[this.passengers.size()];
         for (int i = 0; i < addEntity.links.length; i++) {
             addEntity.links[i] = new EntityLink(this.id, this.passengers.get(i).id, i == 0 ? EntityLink.TYPE_RIDER : TYPE_PASSENGER, false, false, 0f);
@@ -3056,8 +3094,29 @@ public abstract class Entity extends Location implements Metadatable {
         if (!this.hasSpawned.containsKey(player.getLoaderId())) {
             Boolean hasChunk = player.usedChunks.get(Level.chunkHash(this.chunk.getX(), this.chunk.getZ()));
             if (hasChunk != null && hasChunk) {
+                // NEW ↓ Send schema before AddEntityPacket so client knows property definitions
+                if (this.entityProperties != null) {
+                    String typeId = this.getSaveId();
+                    if (!typeId.isEmpty()) {
+                        EntityPropertySchemaRegistry.get().sendSchema(typeId, player);
+                    }
+                }
+                // EXISTING ↓ (unchanged)
                 player.dataPacket(createAddEntityPacket());
                 this.hasSpawned.put(player.getLoaderId(), player);
+                // NEW ↓ String/enum properties can't fit in index-based arrays; send now
+                if (this.entityProperties != null) {
+                    for (Map.Entry<String, Object> entry : this.entityProperties.entrySet()) {
+                        if (entry.getValue() instanceof String) {
+                            ChangeMobPropertyPacket propPk = new ChangeMobPropertyPacket();
+                            propPk.uniqueEntityId = this.id;
+                            propPk.property = entry.getKey();
+                            propPk.stringValue = (String) entry.getValue();
+                            player.dataPacket(propPk);
+                        }
+                    }
+                }
+                // EXISTING ↓ riding + vanillaBossBar blocks continue unchanged after this line
 
                 if (this.riding != null) {
                     this.riding.spawnTo(player);
