@@ -40,9 +40,13 @@ public class RuntimeItemMapping {
     private final Map<String, ItemComponentPacket.ItemDefinition> vanillaItems;
 
     public RuntimeItemMapping(Map<String, MappingEntry> mappings, int protocol) {
+        this(mappings, protocol, protocol);
+    }
+
+    public RuntimeItemMapping(Map<String, MappingEntry> mappings, int protocol, int jsonProtocol) {
         this.protocolId = protocol;
 
-        JsonArray json = Utils.loadJsonResource("runtime_item_states_" + protocol + ".json").getAsJsonArray();
+        JsonArray json = Utils.loadJsonResource("runtime_item_states_" + jsonProtocol + ".json").getAsJsonArray();
         if (json.isEmpty()) {
             throw new IllegalStateException("Empty array");
         }
@@ -74,7 +78,11 @@ public class RuntimeItemMapping {
             if (this.protocolId >= ProtocolInfo.v1_21_60) {
                 int version = entry.get("version").getAsInt();
                 boolean componentBased = entry.get("componentBased").getAsBoolean();
-                CompoundTag components = (CompoundTag) itemComponents.get(identifier);
+                CompoundTag rawData = (CompoundTag) itemComponents.get(identifier);
+                // Clone to get an empty-named root compound, matching the expected network NBT format.
+                // Without cloning, the compound carries the item's identifier as its tag name, which
+                // produces a non-empty root tag name that differs from what clients expect.
+                CompoundTag components = rawData != null ? rawData.clone() : null;
                 this.vanillaItems.put(identifier, new ItemComponentPacket.ItemDefinition(identifier, runtimeId, componentBased, version, components));
             }
 

@@ -56,6 +56,7 @@ public class RuntimeItems {
     private static RuntimeItemMapping mapping843;
     private static RuntimeItemMapping mapping859;
     private static RuntimeItemMapping mapping897;
+    private static RuntimeItemMapping mapping924;
 
     // Remember to update item components in CustomItemManager
     // Remember to update recipes in CraftingManager
@@ -99,7 +100,9 @@ public class RuntimeItems {
     }
 
     public static RuntimeItemMapping getMapping(int protocolId) {
-        if (protocolId >= ProtocolInfo.v1_21_130_28) {
+        if (protocolId >= ProtocolInfo.v1_26_0) {
+            return mapping924;
+        } else if (protocolId >= ProtocolInfo.v1_21_130_28) {
             return mapping897;
         } else if (protocolId >= ProtocolInfo.v1_21_120) {
             return mapping859;
@@ -249,6 +252,7 @@ public class RuntimeItems {
         mapping843 = new RuntimeItemMapping(mappingEntries, ProtocolInfo.v1_21_110);
         mapping859 = new RuntimeItemMapping(mappingEntries, ProtocolInfo.v1_21_120);
         mapping897 = new RuntimeItemMapping(mappingEntries, ProtocolInfo.v1_21_130_28);
+        mapping924 = new RuntimeItemMapping(mappingEntries, ProtocolInfo.v1_26_0, ProtocolInfo.v1_21_130_28);
 
         // NOTE: Check registerCreativeItems protocol if updating creative_items
 
@@ -285,7 +289,8 @@ public class RuntimeItems {
                 mapping827,
                 mapping843,
                 mapping859,
-                mapping897
+                mapping897,
+                mapping924
         };
     }
 }

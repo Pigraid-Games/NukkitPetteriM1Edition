@@ -109,6 +109,9 @@ public class BedrockSession implements NetworkPlayerSession {
 
         if (pk == null) {
             log.warn("Received unknown packet with vanilla ID 0x{} from {}", Integer.toHexString(packetId), this.getAddress());
+            if (this.player != null) {
+                this.player.close("Unknown packet 0x" + Integer.toHexString(packetId));
+            }
             return;
         }
 

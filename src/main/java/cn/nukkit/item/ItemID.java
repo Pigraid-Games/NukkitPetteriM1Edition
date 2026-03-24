@@ -410,6 +410,14 @@ public interface ItemID {
     int CHERRY_DOOR = 799;
     int CHERRY_SIGN = 800;
     int SOUL_CAMPFIRE = 801;
+    // Spear variants (802-807)
+    int WOODEN_SPEAR = 802;
+    int STONE_SPEAR = 803;
+    int IRON_SPEAR = 804;
+    int GOLDEN_SPEAR = 805;
+    int DIAMOND_SPEAR = 806;
+    int NETHERITE_SPEAR = 807;
+    int COPPER_SPEAR = 808;
     //
     int GLOW_ITEM_FRAME = 850;
 }

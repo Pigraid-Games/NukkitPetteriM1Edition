@@ -1,7 +1,10 @@
 package cn.nukkit.network.protocol;
 
+import cn.nukkit.Server;
+import cn.nukkit.inventory.transaction.data.UseItemData;
 import cn.nukkit.math.Vector2;
 import cn.nukkit.math.Vector2f;
+import cn.nukkit.math.Vector3;
 import cn.nukkit.math.Vector3f;
 import cn.nukkit.network.protocol.types.*;
 import lombok.Getter;
@@ -62,6 +65,12 @@ public class PlayerAuthInputPacket extends DataPacket {
      */
     private Vector2f rawMoveVector = EMPTY_VECTOR2F;
 
+    /**
+     * Decoded from the embedded PERFORM_ITEM_INTERACTION data when that flag is set.
+     * Non-null only when the client sent an inline USE_ITEM transaction (e.g. spear stab).
+     */
+    public UseItemData embeddedItemInteraction;
+
     @Override
     public void decode() {
         this.pitch = this.getLFloat();
@@ -94,6 +103,12 @@ public class PlayerAuthInputPacket extends DataPacket {
 
         this.tick = this.getUnsignedVarLong();
         this.delta = this.getVector3f();
+
+        // Decode embedded item interaction (e.g. spear stab). Must be read BEFORE
+        // PERFORM_BLOCK_ACTIONS to keep the byte stream aligned.
+        if (this.inputData.contains(AuthInputAction.PERFORM_ITEM_INTERACTION)) {
+            this.embeddedItemInteraction = readEmbeddedItemInteraction();
+        }
 
         if (this.inputData.contains(AuthInputAction.PERFORM_BLOCK_ACTIONS)) {
             int arraySize = this.getVarInt();
@@ -134,6 +149,86 @@ public class PlayerAuthInputPacket extends DataPacket {
                 }
             }
         }
+    }
+
+    /**
+     * Reads the inline InventoryTransaction embedded when PERFORM_ITEM_INTERACTION is set.
+     * The format mirrors InventoryTransactionPacket.decode() but read from this packet's buffer.
+     * Returns the parsed UseItemData for TYPE_USE_ITEM transactions, or null for other types.
+     */
+    private UseItemData readEmbeddedItemInteraction() {
+        try {
+            // legacyRequestId — always present for protocol >= 407
+            int legacyRequestId = this.getVarInt();
+            if (legacyRequestId < -1 && (legacyRequestId & 1) == 0) {
+                int length = (int) this.getUnsignedVarInt();
+                for (int i = 0; i < length; i++) {
+                    this.getByte();
+                    int bufLen = (int) this.getUnsignedVarInt();
+                    this.get(bufLen);
+                }
+            }
+
+            int transactionType = (int) this.getUnsignedVarInt();
+
+            // hasNetworkIds removed in v1_16_220; all supported protocols are newer, so skip it.
+
+            // actions array — typically empty for USE_ITEM transactions
+            int actionsLen = (int) this.getUnsignedVarInt();
+            for (int i = 0; i < actionsLen; i++) {
+                skipNetworkInventoryAction();
+            }
+
+            if (transactionType == InventoryTransactionPacket.TYPE_USE_ITEM) {
+                UseItemData itemData = new UseItemData();
+                itemData.actionType = (int) this.getUnsignedVarInt();
+                if (protocol >= ProtocolInfo.v1_21_20) {
+                    itemData.triggerType = (int) this.getUnsignedVarInt();
+                }
+                itemData.blockPos = this.getBlockVector3();
+                itemData.face = this.getBlockFace();
+                itemData.hotbarSlot = this.getVarInt();
+                itemData.itemInHand = this.getSlot(this.protocol);
+                itemData.playerPos = new Vector3(this.getLFloat(), this.getLFloat(), this.getLFloat());
+                itemData.clickPos = this.getVector3f();
+                if (protocol >= ProtocolInfo.v1_10_0) {
+                    itemData.blockRuntimeId = (int) this.getUnsignedVarInt();
+                    if (protocol >= ProtocolInfo.v1_21_20) {
+                        itemData.clientInteractPrediction = (int) this.getUnsignedVarInt();
+                    }
+                }
+                return itemData;
+            }
+        } catch (Exception e) {
+            // Malformed embedded transaction — skip silently to avoid breaking movement
+            Server.getInstance().getLogger().debug("Failed to decode embedded item interaction: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Reads and discards one NetworkInventoryAction from the buffer to maintain byte alignment.
+     */
+    private void skipNetworkInventoryAction() {
+        int sourceType = (int) this.getUnsignedVarInt();
+        switch (sourceType) {
+            case 0:   // SOURCE_CONTAINER
+                this.getVarInt(); // windowId
+                break;
+            case 2:   // SOURCE_WORLD
+                this.getUnsignedVarInt(); // flags
+                break;
+            case 3:   // SOURCE_CREATIVE
+                break;
+            case 100: // SOURCE_CRAFT_SLOT
+            case 99999: // SOURCE_TODO
+                this.getVarInt(); // windowId
+                break;
+        }
+        this.getUnsignedVarInt(); // inventorySlot
+        this.getSlot(this.protocol); // oldItem
+        this.getSlot(this.protocol); // newItem
+        // No stackNetworkId for v1_16_220+ (all supported protocols)
     }
 
     @Override
