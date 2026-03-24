@@ -6161,16 +6161,6 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
             loadQueue.add(fovQueue.dequeueLong());
         }
 
-        // Proactively start async disk reads for all queued chunks so they are
-        // in memory by the time sendNextChunk() processes them tick by tick.
-        for (long index : loadQueue) {
-            int cx = Level.getHashX(index);
-            int cz = Level.getHashZ(index);
-            if (this.level.getChunkIfLoaded(cx, cz) == null) {
-                this.level.getChunkAsync(cx, cz, true);
-            }
-        }
-
         // Unload chunks that are now out of range
         LongIterator keys = lastChunk.keySet().iterator();
         while (keys.hasNext()) {
