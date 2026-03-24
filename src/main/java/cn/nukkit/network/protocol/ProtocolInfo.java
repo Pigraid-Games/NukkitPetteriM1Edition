@@ -106,8 +106,9 @@ public interface ProtocolInfo {
     int v1_21_130_28 = 897;
     int v1_21_130 = 898;
     int v1_26_0 = 924;
+    int v1_26_10 = 944;
 
-    int CURRENT_PROTOCOL = DataPacket.CONST(v1_26_0);
+    int CURRENT_PROTOCOL = DataPacket.CONST(v1_26_10);
 
     List<Integer> SUPPORTED_PROTOCOLS = Ints.asList(
             v1_13_0, v1_14_0, v1_14_60, v1_16_0, v1_16_20, v1_16_100_0, v1_16_100_51, v1_16_100_52, v1_16_100,
@@ -118,12 +119,12 @@ public interface ProtocolInfo {
             v1_19_80, v1_20_0_23, v1_20_0, v1_20_10_21, v1_20_10, v1_20_30, v1_20_40, v1_20_50, v1_20_60,
             v1_20_70, v1_20_80, v1_21_0, v1_21_2, v1_21_20, v1_21_30, v1_21_40, v1_21_50_28, v1_21_50, v1_21_60,
             v1_21_70_24, v1_21_70, v1_21_80, v1_21_90, v1_21_93, v1_21_100, v1_21_110, v1_21_111, v1_21_120, v1_21_124,
-            v1_21_130_28, v1_21_130, v1_26_0
+            v1_21_130_28, v1_21_130, v1_26_0, v1_26_10
     );
 
     Set<Integer> ENABLED_PROTOCOLS = Sets.newHashSet(SUPPORTED_PROTOCOLS);
 
-    String MINECRAFT_VERSION_NETWORK = "1.26.0";
+    String MINECRAFT_VERSION_NETWORK = "1.26.10";
     String MINECRAFT_VERSION = 'v' + MINECRAFT_VERSION_NETWORK;
 
     byte BATCH_PACKET = (byte) 0xff;
@@ -356,4 +357,19 @@ public interface ProtocolInfo {
     byte __INTERNAL__CLIENTBOUND_DATA_STORE_PACKET = (byte) 230;
     byte __INTERNAL__GRAPHICS_PARAMETER_OVERRIDE_PACKET = (byte) 231;
     byte __INTERNAL__SERVERBOUND_DATA_STORE_PACKET = (byte) 232;
+    // Packets added in v1_26_0 (924)
+    byte __INTERNAL__CLIENTBOUND_DDUI_SHOW_SCREEN_PACKET = (byte) 233;
+    byte __INTERNAL__CLIENTBOUND_DDUI_CLOSE_SCREEN_PACKET = (byte) 234;
+    byte __INTERNAL__CLIENTBOUND_DDUI_RELOAD_PACKET = (byte) 235;
+    byte __INTERNAL__CLIENTBOUND_TEXTURE_SHIFT_PACKET = (byte) 236;
+    byte __INTERNAL__VOXEL_SHAPES_PACKET = (byte) 237;
+    byte __INTERNAL__CAMERA_SPLINE_PACKET = (byte) 238;
+    byte __INTERNAL__CAMERA_AIM_ASSIST_ACTOR_PRIORITY_PACKET = (byte) 239;
+    // Packets added in v1_26_10 (944)
+    byte __INTERNAL__RESOURCE_PACKS_READY_FOR_VALIDATION_PACKET = (byte) 240;
+    byte __INTERNAL__LOCATOR_BAR_PACKET = (byte) 241;
+    byte __INTERNAL__PARTY_CHANGED_PACKET = (byte) 242;
+    byte __INTERNAL__SERVERBOUND_DATA_DRIVEN_SCREEN_CLOSED_PACKET = (byte) 243;
+    byte __INTERNAL__SYNC_WORLD_CLOCKS_PACKET = (byte) 244;
+    byte __INTERNAL__CLIENTBOUND_ATTRIBUTE_LAYER_SYNC_PACKET = (byte) 245;
 }
