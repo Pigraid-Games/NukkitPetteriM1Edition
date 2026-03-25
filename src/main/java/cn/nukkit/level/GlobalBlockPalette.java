@@ -65,6 +65,7 @@ public class GlobalBlockPalette {
     private static final BlockPalette blockPalette800 = new BlockPalette(ProtocolInfo.v1_21_80);
     private static final BlockPalette blockPalette827 = new BlockPalette(ProtocolInfo.v1_21_100);
     private static final BlockPalette blockPalette843 = new BlockPalette(ProtocolInfo.v1_21_110);
+    private static final BlockPalette blockPalette944 = new BlockPalette(ProtocolInfo.v1_26_10);
 
     // Leave this public to expose for custom blocks impl
     public static final BlockPalette[] NEW_PALETTES = new BlockPalette[]{
@@ -98,7 +99,8 @@ public class GlobalBlockPalette {
             blockPalette786,
             blockPalette800,
             blockPalette827,
-            blockPalette843
+            blockPalette843,
+            blockPalette944
     }; // Did you remember to update getChunkProtocol/matchChunkProtocol?
     private static final Int2IntMap legacyToRuntimeId223 = new Int2IntOpenHashMap();
 
@@ -366,7 +368,9 @@ public class GlobalBlockPalette {
     }
 
     public static BlockPalette getPaletteByProtocol(int protocolId) {
-        if (protocolId >= ProtocolInfo.v1_21_110) {
+        if (protocolId >= ProtocolInfo.v1_26_10) {
+            return blockPalette944;
+        } else if (protocolId >= ProtocolInfo.v1_21_110) {
             return blockPalette843;
         } else if (protocolId >= ProtocolInfo.v1_21_100) {
             return blockPalette827;
