@@ -2220,7 +2220,9 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
     }
 
     public static int getChunkProtocol(int protocol) { // Remember to update when block palette changes
-        if (protocol >= ProtocolInfo.v1_21_110) {
+        if (protocol >= ProtocolInfo.v1_26_10) {
+            return ProtocolInfo.v1_26_10;
+        } else if (protocol >= ProtocolInfo.v1_21_110) {
             return ProtocolInfo.v1_21_110;
         } else if (protocol >= ProtocolInfo.v1_21_100) {
             return ProtocolInfo.v1_21_100;
@@ -3227,7 +3229,9 @@ public class Level implements ChunkManager, Metadatable, GeneratorTaskFactory {
     }
 
     private static boolean matchChunkProtocol(int chunk, int player) { // Remember to update when block palette changes
-        if (player >= ProtocolInfo.v1_21_110) {
+        if (player >= ProtocolInfo.v1_26_10) {
+            return chunk == ProtocolInfo.v1_26_10;
+        } else if (player >= ProtocolInfo.v1_21_110) {
             return chunk == ProtocolInfo.v1_21_110;
         } else if (player >= ProtocolInfo.v1_21_100) {
             return chunk == ProtocolInfo.v1_21_100;
