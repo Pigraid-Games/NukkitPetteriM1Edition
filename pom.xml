@@ -279,11 +279,6 @@
             <artifactId>noise</artifactId>
             <version>0.5.6-SNAPSHOT</version>
         </dependency>
-        <dependency>
-            <groupId>cn.powernukkitx</groupId>
-            <artifactId>libdeflate-java</artifactId>
-            <version>0.0.2-PNX</version>
-        </dependency>
     </dependencies>
 
     <!-- Pin all io.netty artifacts to 4.2 to override the 4.1 transitive deps from netty-transport-raknet -->
@@ -350,7 +345,6 @@
                 <includes>
                     <include>*</include>
                     <include>lang/eng/lang.ini</include>
-                    <include>linux/amd64/libdeflate_jni.so</include>
                 </includes>
             </resource>
         </resources>

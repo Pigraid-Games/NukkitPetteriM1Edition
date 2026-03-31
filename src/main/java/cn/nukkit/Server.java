@@ -317,7 +317,6 @@ public class Server {
      * How many chunks are sent to player per tick.
      */
     public int chunksPerTick;
-    public int chunkSerializationThreads;
     /**
      * How many chunks needs to be sent before the player can spawn.
      */
@@ -507,12 +506,6 @@ public class Server {
         }
 
         this.loadSettings();
-
-        if (cn.nukkit.utils.Zlib.isLibDeflateEnabled()) {
-            this.getLogger().info("libdeflate native compression: ENABLED");
-        } else {
-            this.getLogger().info("libdeflate native compression: unavailable, using Java zlib");
-        }
 
         if (debugLvl < 2/*this.getPropertyBoolean("automatic-bug-report", true)*/) {
             ExceptionHandler.initSentry();
@@ -842,7 +835,6 @@ public class Server {
             put("spawn-threshold", 56);
             put("entity-activation-blocks", 80);
             put("chunk-sending-per-tick", 4);
-            put("chunk-serialization-threads", Math.max(4, Runtime.getRuntime().availableProcessors()));
             put("chunk-ticking-per-tick", 40);
             put("chunk-ticking-radius", 3);
             put("chunk-unload-delay", 30);
@@ -872,7 +864,7 @@ public class Server {
             //put("bstats-metrics", true);
             put("update-notifications", true);
             put("do-not-limit-interactions", false);
-            put("do-not-limit-skin-geometry", false);
+            put("do-not-limit-skin-geometry", true);
             put("persona-skins", true);
             put("skin-change-cooldown", 15);
             put("compression-level", 5);
@@ -2499,9 +2491,8 @@ public class Server {
         this.strongIPBans = this.getPropertyBoolean("strong-ip-bans", false);
         this.spawnRadius = this.getPropertyInt("spawn-protection", 10);
         this.autoSaveTicks = this.getPropertyInt("ticks-per-autosave", 6000);
-        this.doNotLimitSkinGeometry = this.getPropertyBoolean("do-not-limit-skin-geometry", false);
+        this.doNotLimitSkinGeometry = this.getPropertyBoolean("do-not-limit-skin-geometry", true);
         this.chunksPerTick = this.getPropertyInt("chunk-sending-per-tick", 4);
-        this.chunkSerializationThreads = Math.max(1, this.getPropertyInt("chunk-serialization-threads", Math.max(4, Runtime.getRuntime().availableProcessors())));
         this.spawnThreshold = this.getPropertyInt("spawn-threshold", 56);
         this.savePlayerDataByUuid = this.getPropertyBoolean("save-player-data-by-uuid", true);
         this.vanillaPortals = this.getPropertyBoolean("vanilla-portals", true);

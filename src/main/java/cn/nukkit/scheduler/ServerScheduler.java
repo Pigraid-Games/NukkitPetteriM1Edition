@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ServerScheduler {
 
-    public static int WORKERS = Math.max(4, Runtime.getRuntime().availableProcessors());
+    public static int WORKERS = 4;
 
     private final AsyncPool asyncPool;
 

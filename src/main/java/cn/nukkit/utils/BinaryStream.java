@@ -13,7 +13,6 @@ import cn.nukkit.level.GameRules;
 import cn.nukkit.level.GlobalBlockPalette;
 import cn.nukkit.math.BlockFace;
 import cn.nukkit.math.BlockVector3;
-import cn.nukkit.math.NukkitMath;
 import cn.nukkit.math.Vector2f;
 import cn.nukkit.math.Vector3f;
 import cn.nukkit.nbt.NBTIO;
@@ -285,11 +284,7 @@ public class BinaryStream {
     }
 
     public float getFloat(int accuracy) {
-        float val = Float.intBitsToFloat(getInt());
-        if (accuracy > -1) {
-            return (float) NukkitMath.round(val, accuracy);
-        }
-        return val;
+        return Binary.readFloat(this.get(4), accuracy);
     }
 
     public SerializedImage getImage() {
@@ -300,9 +295,7 @@ public class BinaryStream {
     }
 
     public int getInt() {
-        int i = this.offset;
-        this.offset = i + 4;
-        return ((buffer[i] & 0xff) << 24) | ((buffer[i + 1] & 0xff) << 16) | ((buffer[i + 2] & 0xff) << 8) | (buffer[i + 3] & 0xff);
+        return Binary.readInt(this.get(4));
     }
 
     public float getLFloat() {
@@ -310,47 +303,27 @@ public class BinaryStream {
     }
 
     public float getLFloat(int accuracy) {
-        float val = Float.intBitsToFloat(getLInt());
-        if (accuracy > -1) {
-            return (float) NukkitMath.round(val, accuracy);
-        }
-        return val;
+        return Binary.readLFloat(this.get(4), accuracy);
     }
 
     public int getLInt() {
-        int i = this.offset;
-        this.offset = i + 4;
-        return ((buffer[i + 3] & 0xff) << 24) | ((buffer[i + 2] & 0xff) << 16) | ((buffer[i + 1] & 0xff) << 8) | (buffer[i] & 0xff);
+        return Binary.readLInt(this.get(4));
     }
 
     public long getLLong() {
-        int i = this.offset;
-        this.offset = i + 8;
-        return ((long) (buffer[i + 7] & 0xFF) << 56) | ((long) (buffer[i + 6] & 0xFF) << 48)
-                | ((long) (buffer[i + 5] & 0xFF) << 40) | ((long) (buffer[i + 4] & 0xFF) << 32)
-                | ((long) (buffer[i + 3] & 0xFF) << 24) | ((long) (buffer[i + 2] & 0xFF) << 16)
-                | ((long) (buffer[i + 1] & 0xFF) << 8) | (buffer[i] & 0xFF);
+        return Binary.readLLong(this.get(8));
     }
 
     public int getLShort() {
-        int i = this.offset;
-        this.offset = i + 2;
-        return ((buffer[i + 1] & 0xFF) << 8) | (buffer[i] & 0xFF);
+        return Binary.readLShort(this.get(2));
     }
 
     public int getLTriad() {
-        int i = this.offset;
-        this.offset = i + 3;
-        return ((buffer[i + 2] & 0xFF) << 16) | ((buffer[i + 1] & 0xFF) << 8) | (buffer[i] & 0xFF);
+        return Binary.readLTriad(this.get(3));
     }
 
     public long getLong() {
-        int i = this.offset;
-        this.offset = i + 8;
-        return ((long) (buffer[i] & 0xFF) << 56) | ((long) (buffer[i + 1] & 0xFF) << 48)
-                | ((long) (buffer[i + 2] & 0xFF) << 40) | ((long) (buffer[i + 3] & 0xFF) << 32)
-                | ((long) (buffer[i + 4] & 0xFF) << 24) | ((long) (buffer[i + 5] & 0xFF) << 16)
-                | ((long) (buffer[i + 6] & 0xFF) << 8) | (buffer[i + 7] & 0xFF);
+        return Binary.readLong(this.get(8));
     }
 
     public int getOffset() {
@@ -389,9 +362,7 @@ public class BinaryStream {
     }
 
     public int getShort() {
-        int i = this.offset;
-        this.offset = i + 2;
-        return ((buffer[i] & 0xFF) << 8) | (buffer[i + 1] & 0xFF);
+        return Binary.readShort(this.get(2));
     }
 
     public BlockVector3 getSignedBlockPosition() {

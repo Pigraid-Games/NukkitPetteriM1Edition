@@ -1,33 +1,13 @@
 package cn.nukkit.utils;
 
 import cn.nukkit.Server;
-import cn.powernukkitx.libdeflate.Libdeflate;
 
 import java.io.IOException;
 import java.util.zip.Deflater;
 
 public abstract class Zlib {
 
-    private static final ZlibThreadLocal ZLIB_THREAD_LOCAL = new ZlibThreadLocal();
-    private static final ZlibProvider provider;
-
-    static {
-        ZlibProvider selected;
-        try {
-            if (Libdeflate.isAvailable()) {
-                selected = new LibDeflateZlibProvider(ZLIB_THREAD_LOCAL);
-            } else {
-                selected = ZLIB_THREAD_LOCAL;
-            }
-        } catch (Throwable t) {
-            selected = ZLIB_THREAD_LOCAL;
-        }
-        provider = selected;
-    }
-
-    public static boolean isLibDeflateEnabled() {
-        return provider instanceof LibDeflateZlibProvider;
-    }
+    private static final ZlibProvider provider = new ZlibThreadLocal();
 
     public static byte[] deflate(byte[] data) throws Exception {
         return deflate(data, Deflater.DEFAULT_COMPRESSION);
