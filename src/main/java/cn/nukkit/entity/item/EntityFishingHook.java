@@ -227,16 +227,23 @@ public class EntityFishingHook extends EntityProjectile {
             return false;
         }
 
+        // Override water physics before super applies gravity/drag.
+        // Sets motionY to a fixed value so after super subtracts gravity/2 the net movement is correct:
+        //   deep (> 2 blocks below surface): motionY = gravity  → net +0.035/tick upward
+        //   near surface:                    motionY = gravity/2 → net 0 (stays put)
+        if (this.isInsideOfWater()) {
+            this.motionX = 0;
+            this.motionZ = 0;
+            if (this.getY() < this.getWaterHeight() - 2) {
+                this.motionY = getGravity();
+            } else {
+                this.motionY = getGravity() / 2;
+            }
+        }
+
         boolean hasUpdate = super.onUpdate(currentTick);
 
         boolean inWater = this.isInsideOfWater();
-        if (inWater) {
-            this.motionX = 0;
-            this.motionY -= getGravity() * -0.04;
-            this.motionZ = 0;
-            hasUpdate = true;
-        }
-
         if (inWater) {
             if (this.waitTimer == 240) {
                 this.waitTimer = this.waitChance << 1;
